@@ -198,7 +198,7 @@
                 </div>
 
                 <div class="mt-4 grid gap-4 md:mt-6 md:grid-cols-[220px_1fr] md:gap-5">
-                    <div class="overflow-hidden rounded-[1.6rem] bg-parchment/60">
+                    <div class="mx-auto w-full max-w-[180px] overflow-hidden rounded-[1.3rem] bg-parchment/60 sm:max-w-none sm:rounded-[1.6rem]">
                         <img :src="quickView.currentSku?.cover_image || quickView.data?.cover_image || ''" :alt="quickView.data?.name || ''" class="mall-square-media">
                     </div>
                     <div class="space-y-3.5 sm:space-y-5">
