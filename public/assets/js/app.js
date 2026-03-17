@@ -114,6 +114,66 @@
         syncBackToTopButton();
     };
 
+    const shouldShowFloatingCartButton = () => {
+        const pathname = window.location.pathname;
+        if (window.innerWidth > 640) {
+            return false;
+        }
+        if (!pathname.startsWith('/mall')) {
+            return false;
+        }
+        return !pathname.startsWith('/mall/admin')
+            && !pathname.startsWith('/mall/cart')
+            && !pathname.startsWith('/mall/checkout')
+            && !pathname.startsWith('/mall/login')
+            && !pathname.startsWith('/mall/profile');
+    };
+
+    const cartItemCount = (cart = {}) => {
+        return (cart.items || []).reduce((total, item) => total + Number(item.quantity || 0), 0);
+    };
+
+    const setFloatingCartCount = (count = 0) => {
+        const badge = document.querySelector('[data-floating-cart-count]');
+        if (!badge) {
+            return;
+        }
+
+        const normalized = Math.max(0, Number(count || 0));
+        badge.textContent = normalized > 99 ? '99+' : String(normalized);
+        badge.classList.toggle('is-empty', normalized === 0);
+    };
+
+    const syncFloatingCartButton = () => {
+        const button = document.querySelector('[data-floating-cart]');
+        if (!button) {
+            return;
+        }
+
+        button.classList.toggle('is-visible', shouldShowFloatingCartButton());
+        button.setAttribute('href', bootstrap.currentUser ? '/mall/cart' : '/mall/login');
+    };
+
+    const refreshFloatingCartCount = async (nextCount = null) => {
+        syncFloatingCartButton();
+        if (nextCount !== null) {
+            setFloatingCartCount(nextCount);
+            return;
+        }
+
+        if (!bootstrap.currentUser) {
+            setFloatingCartCount(0);
+            return;
+        }
+
+        try {
+            const cart = await apiRequest('/mall/api/cart');
+            setFloatingCartCount(cartItemCount(cart));
+        } catch (error) {
+            setFloatingCartCount(0);
+        }
+    };
+
     const apiRequest = async (url, options = {}) => {
         const method = (options.method || 'GET').toUpperCase();
         const fetchOptions = {
@@ -395,17 +455,22 @@
             syncHeaderOffset();
             bindBackNavigation();
             bindBackToTop();
+            syncFloatingCartButton();
             bindLogoutAction();
+            void refreshFloatingCartCount();
         }, { once: true });
     } else {
         syncHeaderOffset();
         bindBackNavigation();
         bindBackToTop();
+        syncFloatingCartButton();
         bindLogoutAction();
+        void refreshFloatingCartCount();
     }
 
     window.addEventListener('resize', syncHeaderOffset);
     window.addEventListener('scroll', syncBackToTopButton, { passive: true });
+    window.addEventListener('resize', syncFloatingCartButton);
 
     document.addEventListener('alpine:init', () => {
         Alpine.data('loginPage', () => ({
@@ -548,6 +613,7 @@
                     });
                     notice('已加入购物车。');
                     this.quickView.open = false;
+                    await refreshFloatingCartCount();
                 } catch (error) {
                     notice(error.message, 'error');
                 }
@@ -609,6 +675,7 @@
                         },
                     });
                     notice('已加入购物车。');
+                    await refreshFloatingCartCount();
                 } catch (error) {
                     notice(error.message, 'error');
                 }
@@ -830,6 +897,7 @@
             async loadCart() {
                 try {
                     this.cart = await apiRequest('/mall/api/cart');
+                    await refreshFloatingCartCount(cartItemCount(this.cart));
                 } catch (error) {
                     notice(error.message, 'error');
                 }
@@ -837,6 +905,7 @@
             async changeQty(item, quantity) {
                 try {
                     this.cart = await apiRequest(`/mall/api/cart/${item.id}`, { method: 'PUT', body: { quantity } });
+                    await refreshFloatingCartCount(cartItemCount(this.cart));
                 } catch (error) {
                     notice(error.message, 'error');
                 }

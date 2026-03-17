@@ -57,18 +57,18 @@
     <div class="fixed inset-x-0 top-0 z-0 h-72 bg-[radial-gradient(circle_at_top,_rgba(201,135,120,0.2),_transparent_45%)]"></div>
 
     <header class="sticky top-0 z-40 border-b border-bronze/15 bg-parchment/90 backdrop-blur">
-        <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 lg:px-6">
-            <div class="flex items-center gap-3">
-                <button type="button" data-nav-back class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-bronze/25 bg-white/70 text-lg text-bronze shadow-card md:hidden" aria-label="返回">
+        <div class="mx-auto flex max-w-7xl items-center justify-between px-3 py-2 md:px-4 md:py-3 lg:px-6">
+            <div class="flex items-center gap-2.5 md:gap-3">
+                <button type="button" data-nav-back class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-bronze/25 bg-white/70 text-base text-bronze shadow-card md:hidden" aria-label="返回">
                     <span aria-hidden="true">‹</span>
                 </button>
                 <a href="/portal" class="flex items-center gap-3">
-                    <div class="flex h-11 w-11 items-center justify-center rounded-full border border-bronze/40 bg-white/70 shadow-card">
-                        <span class="text-lg font-bold text-bronze">妙</span>
+                    <div class="flex h-8 w-8 items-center justify-center rounded-full border border-bronze/40 bg-white/70 shadow-card md:h-11 md:w-11">
+                        <span class="text-sm font-bold text-bronze md:text-lg">妙</span>
                     </div>
                     <div>
-                        <div class="font-display text-lg tracking-[0.2em] text-bronze">奇妙集市</div>
-                        <div class="text-xs text-ink/60">会员联动电商网站</div>
+                        <div class="font-display text-base tracking-[0.16em] text-bronze md:text-lg md:tracking-[0.2em]">奇妙集市</div>
+                        <div class="text-[10px] text-ink/60 md:text-xs">会员联动电商网站</div>
                     </div>
                 </a>
             </div>
@@ -83,16 +83,16 @@
                 <?php endif; ?>
             </nav>
 
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1.5 md:gap-2">
                 <?php if ($currentUser): ?>
-                    <a href="/mall/profile" class="rounded-full border border-bronze/25 px-3 py-2 text-sm text-ink transition hover:border-bronze hover:text-bronze">
+                    <a href="/mall/profile" class="rounded-full border border-bronze/25 px-2.5 py-1.5 text-xs text-ink transition hover:border-bronze hover:text-bronze md:px-3 md:py-2 md:text-sm">
                         <?= htmlspecialchars($currentUser['nickname'] ?? $currentUser['username'] ?? '用户', ENT_QUOTES, 'UTF-8') ?>
                     </a>
-                    <button type="button" data-logout class="rounded-full border border-rose/25 px-4 py-2 text-sm text-ink transition hover:border-rose hover:text-rose">
+                    <button type="button" data-logout class="rounded-full border border-rose/25 px-3 py-1.5 text-xs text-ink transition hover:border-rose hover:text-rose md:px-4 md:py-2 md:text-sm">
                         退出
                     </button>
                 <?php else: ?>
-                    <a href="/mall/login" class="rounded-full bg-bronze px-4 py-2 text-sm text-white shadow-card transition hover:bg-bronze/90">登录</a>
+                    <a href="/mall/login" class="rounded-full bg-bronze px-3 py-1.5 text-xs text-white shadow-card transition hover:bg-bronze/90 md:px-4 md:py-2 md:text-sm">登录</a>
                 <?php endif; ?>
             </div>
         </div>
@@ -129,6 +129,10 @@
         ]) ?>;
     </script>
     <button type="button" data-back-to-top class="back-top-button" aria-label="返回顶部">↑</button>
+    <a href="/mall/cart" data-floating-cart class="floating-cart-button" aria-label="打开购物车">
+        <img src="<?= asset('images/icon-cart.svg') ?>" alt="" class="h-5 w-5">
+        <span data-floating-cart-count class="floating-cart-badge">0</span>
+    </a>
     <script src="<?= asset('js/app.js') ?>"></script>
 </body>
 </html>
