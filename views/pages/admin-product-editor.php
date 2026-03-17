@@ -44,7 +44,7 @@ $editorData = [
                     </label>
                     <label class="block text-sm text-ink/70">
                         商品分类
-                        <select x-model="productForm.category_id" x-effect="$el.value = String(productForm.category_id || '')" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" required>
+                        <select x-ref="categorySelect" x-model="productForm.category_id" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" required>
                             <option value="">请选择分类</option>
                             <template x-for="item in categories" :key="item.id">
                                 <option :value="String(item.id)" x-text="categoryLabel(item)"></option>

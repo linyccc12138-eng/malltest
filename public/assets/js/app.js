@@ -745,17 +745,27 @@
             detailMode: 'preview',
             uploading: { cover: false },
             init() {
-                this.$nextTick(() => {
-                    const existingCategoryId = pageData.product?.category_id;
-                    if (existingCategoryId !== undefined && existingCategoryId !== null && existingCategoryId !== '') {
-                        this.productForm.category_id = String(existingCategoryId);
-                        return;
-                    }
+                const syncCategorySelection = (value) => {
+                    const normalized = value !== undefined && value !== null && value !== '' ? String(value) : '';
+                    this.productForm.category_id = normalized;
+                    this.$nextTick(() => {
+                        window.requestAnimationFrame(() => {
+                            if (this.$refs.categorySelect) {
+                                this.$refs.categorySelect.value = normalized;
+                            }
+                        });
+                    });
+                };
 
-                    if (!this.productForm.category_id && this.categories[0]) {
-                        this.productForm.category_id = String(this.categories[0].id);
-                    }
-                });
+                const existingCategoryId = pageData.product?.category_id;
+                if (existingCategoryId !== undefined && existingCategoryId !== null && existingCategoryId !== '') {
+                    syncCategorySelection(existingCategoryId);
+                    return;
+                }
+
+                if (!this.productForm.category_id && this.categories[0]) {
+                    syncCategorySelection(this.categories[0].id);
+                }
             },
             categoryLabel: categoryOptionLabel,
             async switchDetailMode(mode) {
