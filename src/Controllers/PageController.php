@@ -90,9 +90,16 @@ class PageController extends BaseController
 
     public function productDetail(Request $request, array $params = []): Response
     {
-        $product = $this->catalog->findProductBySlug((string) ($params['slug'] ?? ''));
+        $identifier = trim((string) ($params['id'] ?? ''));
+        $product = ctype_digit($identifier)
+            ? $this->catalog->findProductById((int) $identifier)
+            : $this->catalog->findProductBySlug($identifier);
         if (!$product) {
             return Response::html('<h1>404</h1><p>商品不存在或已下架。</p>', 404);
+        }
+
+        if (!ctype_digit($identifier)) {
+            return $this->redirect('/mall/products/' . (int) $product['id']);
         }
 
         $user = $this->users->currentUser();

@@ -122,6 +122,7 @@ CREATE TABLE IF NOT EXISTS products (
   category_id INT NOT NULL,
   name VARCHAR(180) NOT NULL,
   slug VARCHAR(200) NOT NULL,
+  summary VARCHAR(255) DEFAULT '',
   subtitle VARCHAR(255) DEFAULT '',
   brand VARCHAR(120) DEFAULT '',
   price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
@@ -311,12 +312,12 @@ INSERT INTO categories (id, parent_id, name, slug, level, sort_order, is_visible
 (3, 0, '灵感课程', 'courses', 1, 3, 1, 'course', '/assets/images/navigation/nav-course.webp', NOW(), NOW())
 ON DUPLICATE KEY UPDATE name = VALUES(name), sort_order = VALUES(sort_order), updated_at = NOW();
 
-INSERT INTO products (id, category_id, name, slug, subtitle, brand, price, market_price, rating, sales_count, stock_total, is_on_sale, support_member_discount, is_course, is_recommended_course, is_new_arrival, quick_view_text, cover_image, gallery_json, detail_html, created_at, updated_at) VALUES
-(1, 1, '月桂鎏金花瓣香氛蜡烛', 'golden-laurel-candle', '穆夏花饰感的金粉花瓣与木质香调', 'Arc Bloom', 268.00, 328.00, 4.9, 86, 24, 1, 1, 0, 0, 1, '适合客厅与书房的氛围型香氛蜡烛，支持会员折扣。', '/assets/images/products/candle-gold.webp', JSON_ARRAY('/assets/images/products/candle-gold.webp', '/assets/images/products/candle-detail.webp'), '<p>以月桂、雪松与白麝香构成层次感香气，适合营造沉静优雅的家居氛围。</p>', NOW(), NOW()),
-(2, 2, '雾茶丝绒披肩', 'mist-tea-shawl', '柔雾茶绿与细致流苏，适合春秋叠搭', 'Velvet Muse', 199.00, 259.00, 4.8, 52, 30, 1, 1, 0, 0, 1, '披肩轻盈柔软，适合通勤与旅行。', '/assets/images/products/shawl-mist.webp', JSON_ARRAY('/assets/images/products/shawl-mist.webp'), '<p>披肩采用轻柔丝绒触感面料，兼顾轻保暖与装饰性。</p>', NOW(), NOW()),
-(3, 3, '构图与叙事美学课', 'composition-story-course', '课程型商品，支持推荐课程展示', 'Magic Studio', 399.00, 499.00, 5.0, 108, 999, 1, 0, 1, 1, 0, '从构图、节奏到页面叙事的完整创作课。', '/assets/images/products/course-composition.webp', JSON_ARRAY('/assets/images/products/course-composition.webp'), '<p>课程覆盖视觉叙事、配色节奏、页面组织方式等系统内容。</p>', NOW(), NOW()),
-(4, 1, '琥珀花窗身体乳', 'amber-window-lotion', '温暖琥珀与奶霜触感，适合秋冬护理', 'Arc Bloom', 158.00, 198.00, 4.7, 41, 18, 1, 1, 0, 0, 0, '柔润不黏腻，适合夜间香氛护理。', '/assets/images/products/lotion-amber.webp', JSON_ARRAY('/assets/images/products/lotion-amber.webp'), '<p>身体乳主打滋润与香气留存，适合搭配同系列香氛使用。</p>', NOW(), NOW())
-ON DUPLICATE KEY UPDATE subtitle = VALUES(subtitle), brand = VALUES(brand), price = VALUES(price), stock_total = VALUES(stock_total), updated_at = NOW();
+INSERT INTO products (id, category_id, name, slug, summary, subtitle, brand, price, market_price, rating, sales_count, stock_total, is_on_sale, support_member_discount, is_course, is_recommended_course, is_new_arrival, quick_view_text, cover_image, gallery_json, detail_html, created_at, updated_at) VALUES
+(1, 1, '月桂鎏金花瓣香氛蜡烛', 'golden-laurel-candle', '穆夏花饰感的金粉花瓣与木质香调', '穆夏花饰感的金粉花瓣与木质香调', 'Arc Bloom', 268.00, 328.00, 4.9, 86, 24, 1, 1, 0, 0, 1, '适合客厅与书房的氛围型香氛蜡烛，支持会员折扣。', '/assets/images/products/candle-gold.webp', JSON_ARRAY('/assets/images/products/candle-gold.webp', '/assets/images/products/candle-detail.webp'), '<p>以月桂、雪松与白麝香构成层次感香气，适合营造沉静优雅的家居氛围。</p>', NOW(), NOW()),
+(2, 2, '雾茶丝绒披肩', 'mist-tea-shawl', '柔雾茶绿与细致流苏，适合春秋叠搭', '柔雾茶绿与细致流苏，适合春秋叠搭', 'Velvet Muse', 199.00, 259.00, 4.8, 52, 30, 1, 1, 0, 0, 1, '披肩轻盈柔软，适合通勤与旅行。', '/assets/images/products/shawl-mist.webp', JSON_ARRAY('/assets/images/products/shawl-mist.webp'), '<p>披肩采用轻柔丝绒触感面料，兼顾轻保暖与装饰性。</p>', NOW(), NOW()),
+(3, 3, '构图与叙事美学课', 'composition-story-course', '课程型商品，支持推荐课程展示', '课程型商品，支持推荐课程展示', 'Magic Studio', 399.00, 499.00, 5.0, 108, 999, 1, 0, 1, 1, 0, '从构图、节奏到页面叙事的完整创作课。', '/assets/images/products/course-composition.webp', JSON_ARRAY('/assets/images/products/course-composition.webp'), '<p>课程覆盖视觉叙事、配色节奏、页面组织方式等系统内容。</p>', NOW(), NOW()),
+(4, 1, '琥珀花窗身体乳', 'amber-window-lotion', '温暖琥珀与奶霜触感，适合秋冬护理', '温暖琥珀与奶霜触感，适合秋冬护理', 'Arc Bloom', 158.00, 198.00, 4.7, 41, 18, 1, 1, 0, 0, 0, '柔润不黏腻，适合夜间香氛护理。', '/assets/images/products/lotion-amber.webp', JSON_ARRAY('/assets/images/products/lotion-amber.webp'), '<p>身体乳主打滋润与香气留存，适合搭配同系列香氛使用。</p>', NOW(), NOW())
+ON DUPLICATE KEY UPDATE summary = VALUES(summary), subtitle = VALUES(subtitle), brand = VALUES(brand), price = VALUES(price), stock_total = VALUES(stock_total), updated_at = NOW();
 
 INSERT INTO product_skus (product_id, sku_code, attribute_json, price, stock, cover_image, created_at, updated_at) VALUES
 (1, 'SKU-CANDLE-01', JSON_OBJECT('香型', '月桂木质调', '规格', '220g'), 268.00, 24, '/assets/images/products/candle-gold.webp', NOW(), NOW()),

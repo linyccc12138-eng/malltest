@@ -17,7 +17,7 @@
         <div class="rounded-[2rem] border border-bronze/15 bg-white/80 p-6 shadow-glow">
             <div class="text-sm uppercase tracking-[0.35em] text-bronze/70" x-text="product.brand || '精选品牌'"></div>
             <h1 class="mt-3 font-display text-4xl text-ink" x-text="product.name"></h1>
-            <p class="mt-3 text-sm leading-7 text-ink/65" x-text="product.subtitle"></p>
+            <p class="mt-3 text-sm leading-7 text-ink/65" x-text="product.summary"></p>
 
             <div class="mt-5 flex items-end gap-3">
                 <div class="text-3xl font-semibold text-bronze">¥<span x-text="formatMoney(currentPrice)"></span></div>

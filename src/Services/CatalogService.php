@@ -53,7 +53,7 @@ class CatalogService
         }
 
         if (!empty($filters['keyword'])) {
-            $where[] = '(p.name LIKE :keyword OR p.subtitle LIKE :keyword)';
+            $where[] = '(p.name LIKE :keyword OR p.summary LIKE :keyword OR p.subtitle LIKE :keyword)';
             $params[':keyword'] = '%' . trim((string) $filters['keyword']) . '%';
         }
         if (!empty($filters['brand'])) {
@@ -143,7 +143,7 @@ class CatalogService
             'SELECT p.*, c.name AS category_name
              FROM products p
              LEFT JOIN categories c ON c.id = p.category_id
-             WHERE p.slug = :slug
+             WHERE p.slug = :slug OR p.name = :slug
              LIMIT 1'
         );
         $stmt->execute([':slug' => $slug]);
@@ -273,11 +273,15 @@ class CatalogService
                 $stockTotal = (int) ($data['stock_total'] ?? 0);
             }
 
+            $summary = trim((string) ($data['summary'] ?? $data['subtitle'] ?? ''));
+            $subtitle = trim((string) ($data['subtitle'] ?? $summary));
+
             $payload = [
                 ':category_id' => (int) $data['category_id'],
                 ':name' => trim((string) $data['name']),
                 ':slug' => trim((string) ($data['slug'] ?? slugify((string) $data['name']))),
-                ':subtitle' => trim((string) ($data['subtitle'] ?? '')),
+                ':summary' => $summary,
+                ':subtitle' => $subtitle,
                 ':brand' => trim((string) ($data['brand'] ?? '')),
                 ':price' => round((float) ($data['price'] ?? 0), 2),
                 ':market_price' => round((float) ($data['market_price'] ?? 0), 2),
@@ -298,7 +302,7 @@ class CatalogService
 
             if ($productId) {
                 $sql = 'UPDATE products
-                        SET category_id = :category_id, name = :name, slug = :slug, subtitle = :subtitle, brand = :brand,
+                        SET category_id = :category_id, name = :name, slug = :slug, summary = :summary, subtitle = :subtitle, brand = :brand,
                             price = :price, market_price = :market_price, rating = :rating, sales_count = :sales_count,
                             stock_total = :stock_total, is_on_sale = :is_on_sale, support_member_discount = :support_member_discount,
                             is_course = :is_course, is_recommended_course = :is_recommended_course, is_new_arrival = :is_new_arrival,
@@ -307,10 +311,10 @@ class CatalogService
                         WHERE id = :id';
                 $payload[':id'] = $productId;
             } else {
-                $sql = 'INSERT INTO products (category_id, name, slug, subtitle, brand, price, market_price, rating, sales_count,
+                $sql = 'INSERT INTO products (category_id, name, slug, summary, subtitle, brand, price, market_price, rating, sales_count,
                             stock_total, is_on_sale, support_member_discount, is_course, is_recommended_course, is_new_arrival,
                             quick_view_text, cover_image, gallery_json, detail_html, created_at, updated_at)
-                        VALUES (:category_id, :name, :slug, :subtitle, :brand, :price, :market_price, :rating, :sales_count,
+                        VALUES (:category_id, :name, :slug, :summary, :subtitle, :brand, :price, :market_price, :rating, :sales_count,
                             :stock_total, :is_on_sale, :support_member_discount, :is_course, :is_recommended_course, :is_new_arrival,
                             :quick_view_text, :cover_image, :gallery_json, :detail_html, :created_at, :updated_at)';
                 $payload[':created_at'] = now();
@@ -469,6 +473,10 @@ class CatalogService
         $product = $row;
         $product['gallery'] = json_decode((string) ($row['gallery_json'] ?? '[]'), true) ?: [];
         $product['detail_html'] = (string) ($row['detail_html'] ?? '');
+        $product['summary'] = trim((string) ($row['summary'] ?? ''));
+        if ($product['summary'] === '') {
+            $product['summary'] = trim((string) ($row['subtitle'] ?? ''));
+        }
         $product['price'] = (float) ($row['price'] ?? 0);
         $product['market_price'] = (float) ($row['market_price'] ?? 0);
         $product['rating'] = (float) ($row['rating'] ?? 0);

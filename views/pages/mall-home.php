@@ -1,37 +1,21 @@
 <?php $homeData = $homeSections ?? []; ?>
 <script>window.PAGE_DATA = <?= json_encode_unicode(['home' => $homeData]) ?>;</script>
 <section x-data="mallHomePage()" class="space-y-8 animate-rise">
-    <div class="grid gap-4 lg:grid-cols-[1.3fr_0.9fr]">
-        <div class="relative overflow-hidden rounded-[2rem] border border-bronze/20 bg-white/75 p-4 shadow-glow backdrop-blur sm:p-5">
+    <div class="grid gap-4 lg:grid-cols-[1.3fr_0.9fr] lg:auto-rows-fr">
+        <div class="relative h-full overflow-hidden rounded-[2rem] border border-bronze/20 bg-white/75 p-4 shadow-glow backdrop-blur sm:p-5">
             <div class="absolute -right-16 top-0 h-28 w-28 rounded-full bg-rose/10 blur-3xl"></div>
             <div class="absolute left-4 top-4 h-16 w-16 rounded-full border border-bronze/10 bg-bronze/5"></div>
-            <div class="relative ml-auto max-w-2xl">
+            <div class="relative ml-auto flex h-full max-w-2xl flex-col justify-center">
                 <p class="text-sm uppercase tracking-[0.35em] text-bronze/70">WeChat Mall</p>
                 <h1 class="mt-3 font-display text-3xl leading-tight text-ink sm:text-4xl">穆夏风格的会员联动商城，兼顾商品、课程与移动端下单体验</h1>
-                <p class="mt-3 max-w-xl text-sm leading-6 text-ink/68">
-                    商城支持游客浏览、会员折扣、余额支付、微信支付、三级分类与后台配置。会员等级与余额直接读取会员系统数据库，确保两套系统的信息实时同步。
-                </p>
-                <div class="mt-4 flex flex-wrap gap-3">
-                    <a href="#catalog" class="rounded-full bg-bronze px-5 py-3 text-sm text-white shadow-card transition hover:bg-bronze/90">浏览商品</a>
-                    <?php if (!$currentUser): ?>
-                        <a href="/mall/login" class="rounded-full border border-bronze/25 px-5 py-3 text-sm text-bronze transition hover:border-bronze hover:bg-bronze/5">登录后开始购物</a>
-                    <?php else: ?>
-                        <a href="/mall/profile" class="rounded-full border border-bronze/25 px-5 py-3 text-sm text-bronze transition hover:border-bronze hover:bg-bronze/5">进入用户中心</a>
-                    <?php endif; ?>
-                </div>
             </div>
         </div>
 
         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-            <div class="rounded-[1.6rem] border border-sage/15 bg-white/75 p-4 shadow-card">
+            <div class="h-full rounded-[1.6rem] border border-sage/15 bg-white/75 p-4 shadow-card">
                 <div class="text-sm uppercase tracking-[0.3em] text-sage/70">会员权益</div>
                 <div class="mt-2 font-display text-xl text-ink"><?= $currentMember ? htmlspecialchars($currentMember['fclassesname'], ENT_QUOTES, 'UTF-8') : '未绑定会员' ?></div>
                 <p class="mt-2 text-sm text-ink/65">支持实时读取会员等级、余额与折扣。商品可单独配置是否参与会员折扣。</p>
-            </div>
-            <div class="rounded-[1.6rem] border border-teal/15 bg-white/75 p-4 shadow-card">
-                <div class="text-sm uppercase tracking-[0.3em] text-teal/70">支付方式</div>
-                <div class="mt-2 font-display text-xl text-ink">微信支付 / 余额支付</div>
-                <p class="mt-2 text-sm text-ink/65">未支付订单 15 分钟自动关闭并回滚库存，支付成功后通过微信消息通知用户与管理员。</p>
             </div>
         </div>
     </div>
@@ -99,13 +83,13 @@
             <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 <template x-for="item in products.data" :key="item.id">
                     <article class="group rounded-[1.6rem] border border-bronze/12 bg-white/85 p-4 shadow-card transition duration-300 hover:-translate-y-1 hover:shadow-glow">
-                        <a :href="'/mall/products/' + item.slug" class="block overflow-hidden rounded-[1.4rem] bg-parchment/70">
+                        <a :href="'/mall/products/' + item.id" class="block overflow-hidden rounded-[1.4rem] bg-parchment/70">
                             <div class="product-cover h-52 bg-cover bg-center transition duration-500 group-hover:scale-[1.04]" :style="`background-image:url(${item.cover_image})`"></div>
                         </a>
                         <div class="mt-4 flex items-start justify-between gap-3">
                             <div class="min-w-0">
                                 <h3 class="truncate font-semibold text-ink" x-text="item.name"></h3>
-                                <p class="mt-1 line-clamp-2 text-sm text-ink/60" x-text="item.subtitle"></p>
+                                <p class="mt-1 line-clamp-2 text-sm text-ink/60" x-text="item.summary"></p>
                             </div>
                             <span class="rounded-full bg-sage/10 px-3 py-1 text-xs text-sage" x-text="item.brand || '无品牌'"></span>
                         </div>
@@ -130,10 +114,10 @@
             </div>
             <div class="mt-4 grid gap-4 sm:grid-cols-2">
                 <?php foreach (($homeData['new_arrivals'] ?? []) as $item): ?>
-                    <a href="/mall/products/<?= urlencode($item['slug']) ?>" class="rounded-[1.4rem] border border-sage/10 bg-sage/5 p-4 transition hover:bg-sage/10">
+                    <a href="/mall/products/<?= (int) $item['id'] ?>" class="rounded-[1.4rem] border border-sage/10 bg-sage/5 p-4 transition hover:bg-sage/10">
                         <div class="text-sm text-sage/70">新品推荐</div>
                         <div class="mt-2 font-medium text-ink"><?= htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8') ?></div>
-                        <div class="mt-1 text-sm text-ink/55"><?= htmlspecialchars($item['subtitle'], ENT_QUOTES, 'UTF-8') ?></div>
+                        <div class="mt-1 text-sm text-ink/55"><?= htmlspecialchars($item['summary'], ENT_QUOTES, 'UTF-8') ?></div>
                     </a>
                 <?php endforeach; ?>
             </div>
@@ -146,10 +130,10 @@
             </div>
             <div class="mt-4 grid gap-4 sm:grid-cols-2">
                 <?php foreach (($homeData['recommended_courses'] ?? []) as $item): ?>
-                    <a href="/mall/products/<?= urlencode($item['slug']) ?>" class="rounded-[1.4rem] border border-teal/10 bg-teal/5 p-4 transition hover:bg-teal/10">
+                    <a href="/mall/products/<?= (int) $item['id'] ?>" class="rounded-[1.4rem] border border-teal/10 bg-teal/5 p-4 transition hover:bg-teal/10">
                         <div class="text-sm text-teal/70">课程型商品</div>
                         <div class="mt-2 font-medium text-ink"><?= htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8') ?></div>
-                        <div class="mt-1 text-sm text-ink/55"><?= htmlspecialchars($item['subtitle'], ENT_QUOTES, 'UTF-8') ?></div>
+                        <div class="mt-1 text-sm text-ink/55"><?= htmlspecialchars($item['summary'], ENT_QUOTES, 'UTF-8') ?></div>
                     </a>
                 <?php endforeach; ?>
             </div>

@@ -182,6 +182,7 @@
     const normalizeProductForm = (item = {}) => ({
         id: item.id ?? null,
         name: item.name || '',
+        summary: item.summary || item.subtitle || '',
         subtitle: item.subtitle || '',
         brand: item.brand || '',
         category_id: item.category_id !== undefined && item.category_id !== null ? String(item.category_id) : '',
@@ -460,7 +461,16 @@
                 void this.bootstrapPage();
             },
             emptyAddressForm() {
-                return { id: null, receiver_name: '', receiver_phone: '', province: '', city: '', district: '', detail_address: '', is_default: true };
+                return {
+                    id: null,
+                    receiver_name: '',
+                    receiver_phone: this.profile.phone || '',
+                    province: '',
+                    city: '',
+                    district: '',
+                    detail_address: '',
+                    is_default: true,
+                };
             },
             orderPages() {
                 return pagerNumbers(this.orderPager);
@@ -735,9 +745,17 @@
             detailMode: 'preview',
             uploading: { cover: false },
             init() {
-                if (!this.productForm.category_id && this.categories[0]) {
-                    this.productForm.category_id = String(this.categories[0].id);
-                }
+                this.$nextTick(() => {
+                    const existingCategoryId = pageData.product?.category_id;
+                    if (existingCategoryId !== undefined && existingCategoryId !== null && existingCategoryId !== '') {
+                        this.productForm.category_id = String(existingCategoryId);
+                        return;
+                    }
+
+                    if (!this.productForm.category_id && this.categories[0]) {
+                        this.productForm.category_id = String(this.categories[0].id);
+                    }
+                });
             },
             categoryLabel: categoryOptionLabel,
             async switchDetailMode(mode) {

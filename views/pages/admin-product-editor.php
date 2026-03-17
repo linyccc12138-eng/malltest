@@ -35,8 +35,8 @@ $editorData = [
                         <input x-model="productForm.name" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" required>
                     </label>
                     <label class="block text-sm text-ink/70">
-                        副标题
-                        <input x-model="productForm.subtitle" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55">
+                        商品简介
+                        <input x-model="productForm.summary" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" placeholder="例如：柔雾茶绿与细致流苏，适合春秋叠搭">
                     </label>
                     <label class="block text-sm text-ink/70">
                         品牌

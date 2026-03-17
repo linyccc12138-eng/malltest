@@ -67,7 +67,7 @@ $courses = $navData['recommended_courses'] ?? [];
             </div>
             <div class="space-y-4">
                 <?php foreach ($newProducts as $product): ?>
-                    <a href="/mall/products/<?= urlencode($product['slug']) ?>" class="flex items-center gap-3 rounded-[1.4rem] border border-sage/10 bg-sage/5 p-4 transition hover:bg-sage/10">
+                    <a href="/mall/products/<?= (int) $product['id'] ?>" class="flex items-center gap-3 rounded-[1.4rem] border border-sage/10 bg-sage/5 p-4 transition hover:bg-sage/10">
                         <div class="h-16 w-16 rounded-2xl bg-cover bg-center" style="background-image:url('<?= htmlspecialchars($product['cover_image'], ENT_QUOTES, 'UTF-8') ?>')"></div>
                         <div class="min-w-0">
                             <div class="truncate font-medium text-ink"><?= htmlspecialchars($product['name'], ENT_QUOTES, 'UTF-8') ?></div>
@@ -85,9 +85,9 @@ $courses = $navData['recommended_courses'] ?? [];
             </div>
             <div class="space-y-4">
                 <?php foreach ($courses as $course): ?>
-                    <a href="/mall/products/<?= urlencode($course['slug']) ?>" class="block rounded-[1.4rem] border border-teal/10 bg-teal/5 p-4 transition hover:bg-teal/10">
+                    <a href="/mall/products/<?= (int) $course['id'] ?>" class="block rounded-[1.4rem] border border-teal/10 bg-teal/5 p-4 transition hover:bg-teal/10">
                         <div class="font-medium text-ink"><?= htmlspecialchars($course['name'], ENT_QUOTES, 'UTF-8') ?></div>
-                        <p class="mt-2 text-sm leading-6 text-ink/60"><?= htmlspecialchars($course['subtitle'], ENT_QUOTES, 'UTF-8') ?></p>
+                        <p class="mt-2 text-sm leading-6 text-ink/60"><?= htmlspecialchars($course['summary'], ENT_QUOTES, 'UTF-8') ?></p>
                     </a>
                 <?php endforeach; ?>
             </div>

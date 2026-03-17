@@ -160,6 +160,8 @@ class MembershipService
                 throw new \RuntimeException('初始金额不能小于 0。');
             }
 
+            $remark = trim((string) ($data['fmark'] ?? ''));
+
             $insert = $pdo->prepare(
                 'INSERT INTO member (fnumber, fname, fclassesid, fclassesname, faccruedamount, fbalance, fmark)
                  VALUES (:fnumber, :fname, :fclassesid, :fclassesname, :faccruedamount, :fbalance, :fmark)'
@@ -171,7 +173,7 @@ class MembershipService
                 ':fclassesname' => $className,
                 ':faccruedamount' => $amount,
                 ':fbalance' => $amount,
-                ':fmark' => trim((string) ($data['fmark'] ?? '')),
+                ':fmark' => $remark,
             ]);
 
             $memberId = (int) $pdo->lastInsertId();
@@ -184,7 +186,7 @@ class MembershipService
                 $className,
                 $amount,
                 $amount,
-                $amount > 0 ? '后台新增会员并写入初始余额' : '后台新增会员',
+                $remark,
                 ''
             );
 
@@ -231,6 +233,8 @@ class MembershipService
                 throw new \RuntimeException('会员余额不能小于 0。');
             }
 
+            $remark = trim((string) ($data['fmark'] ?? $existing['fmark'] ?? ''));
+
             $update = $pdo->prepare(
                 'UPDATE member
                  SET fnumber = :fnumber, fname = :fname, fclassesid = :fclassesid, fclassesname = :fclassesname, fbalance = :fbalance, fmark = :fmark
@@ -242,7 +246,7 @@ class MembershipService
                 ':fclassesid' => $classId,
                 ':fclassesname' => $className,
                 ':fbalance' => $balance,
-                ':fmark' => trim((string) ($data['fmark'] ?? $existing['fmark'] ?? '')),
+                ':fmark' => $remark,
                 ':fid' => $memberId,
             ]);
 
@@ -255,7 +259,7 @@ class MembershipService
                 $className,
                 0,
                 $balance,
-                trim((string) ($data['fmark'] ?? '后台编辑会员信息')),
+                $remark,
                 ''
             );
 
