@@ -64,6 +64,30 @@ class PageController extends BaseController
         ]);
     }
 
+    public function uploadedFile(Request $request, array $params = []): Response
+    {
+        $filename = basename((string) ($params['filename'] ?? ''));
+        if ($filename === '') {
+            return Response::html('<h1>404</h1><p>文件不存在。</p>', 404);
+        }
+
+        $uploadDir = (string) $this->app->config()->get('app.upload_path', base_path('storage/uploads'));
+        $filePath = rtrim($uploadDir, '/') . '/' . $filename;
+        if (!is_file($filePath)) {
+            return Response::html('<h1>404</h1><p>文件不存在。</p>', 404);
+        }
+
+        $content = file_get_contents($filePath);
+        if ($content === false) {
+            return Response::html('<h1>500</h1><p>文件读取失败。</p>', 500);
+        }
+
+        return new Response($content, 200, [
+            'Content-Type' => mime_content_type($filePath) ?: 'application/octet-stream',
+            'Cache-Control' => 'public, max-age=604800',
+        ]);
+    }
+
     public function productDetail(Request $request, array $params = []): Response
     {
         $product = $this->catalog->findProductBySlug((string) ($params['slug'] ?? ''));

@@ -58,18 +58,19 @@ class UserService
             throw new \RuntimeException('登录过于频繁，请 1 分钟后再试。');
         }
 
+        $identifier = trim($username);
         $stmt = $this->db->mall()->prepare(
-            'SELECT id, username, password_hash, role, status
+            'SELECT id, username, phone, password_hash, role, status
              FROM mall_users
-             WHERE username = :username
+             WHERE username = :identifier OR phone = :identifier
              LIMIT 1'
         );
-        $stmt->execute([':username' => $username]);
+        $stmt->execute([':identifier' => $identifier]);
         $user = $stmt->fetch();
 
         if (!$user || !password_verify($password, (string) $user['password_hash']) || $user['status'] !== 'active') {
             $this->rateLimiter->hit($key, 60);
-            $this->logger->warning('auth', '登录失败', ['username' => $username], null, $request);
+            $this->logger->warning('auth', '登录失败', ['username' => $identifier], null, $request);
             throw new \RuntimeException('用户名或密码错误，或账号已停用。');
         }
 
@@ -79,7 +80,7 @@ class UserService
         $update = $this->db->mall()->prepare('UPDATE mall_users SET last_login_at = :last_login_at WHERE id = :id');
         $update->execute([':last_login_at' => now(), ':id' => (int) $user['id']]);
 
-        $this->logger->info('auth', '用户登录成功', ['username' => $username], (int) $user['id'], $request);
+        $this->logger->info('auth', '用户登录成功', ['username' => $identifier], (int) $user['id'], $request);
 
         return [
             'id' => (int) $user['id'],

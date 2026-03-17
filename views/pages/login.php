@@ -11,8 +11,8 @@
 
         <form x-data="loginPage()" @submit.prevent="submit" class="mt-8 space-y-5">
             <label class="block text-sm text-ink/70">
-                用户名
-                <input x-model="form.username" type="text" class="mt-2 w-full rounded-[1.2rem] border-bronze/15 bg-parchment/50" placeholder="请输入用户名">
+                用户名或手机号
+                <input x-model="form.username" type="text" class="mt-2 w-full rounded-[1.2rem] border-bronze/15 bg-parchment/50" placeholder="请输入用户名或手机号">
             </label>
             <label class="block text-sm text-ink/70">
                 密码

@@ -48,7 +48,15 @@ if (!function_exists('base_path')) {
 if (!function_exists('asset')) {
     function asset(string $path): string
     {
-        return '/assets/' . ltrim($path, '/');
+        $normalizedPath = ltrim($path, '/');
+        $assetPath = '/assets/' . $normalizedPath;
+        $fullPath = base_path('public/assets/' . $normalizedPath);
+
+        if (is_file($fullPath)) {
+            return $assetPath . '?v=' . filemtime($fullPath);
+        }
+
+        return $assetPath;
     }
 }
 

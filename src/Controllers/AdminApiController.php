@@ -342,17 +342,25 @@ class AdminApiController extends BaseController
                 throw new \RuntimeException('未接收到上传文件。');
             }
 
-            $uploadDir = base_path('public/assets/images/uploads');
-            if (!is_dir($uploadDir)) {
-                mkdir($uploadDir, 0777, true);
+            $uploadDir = (string) $this->app->config()->get('app.upload_path', base_path('storage/uploads'));
+            if (!is_dir($uploadDir) && !mkdir($uploadDir, 0775, true) && !is_dir($uploadDir)) {
+                throw new \RuntimeException('创建上传目录失败，请检查目录权限。');
             }
 
             $extension = pathinfo((string) $request->files['file']['name'], PATHINFO_EXTENSION) ?: 'png';
+            $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
+            $extension = strtolower($extension);
+            if (!in_array($extension, $allowedExtensions, true)) {
+                throw new \RuntimeException('仅支持上传常见图片格式。');
+            }
+
             $filename = 'editor-' . date('YmdHis') . '-' . random_int(1000, 9999) . '.' . strtolower($extension);
             $destination = $uploadDir . '/' . $filename;
-            move_uploaded_file($request->files['file']['tmp_name'], $destination);
+            if (!move_uploaded_file($request->files['file']['tmp_name'], $destination)) {
+                throw new \RuntimeException('保存上传文件失败，请检查目录权限。');
+            }
 
-            return ['location' => '/assets/images/uploads/' . $filename];
+            return ['location' => '/mall/uploads/' . $filename];
         });
     }
 

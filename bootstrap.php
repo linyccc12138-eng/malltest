@@ -74,6 +74,7 @@ $router = $app->router();
 $router->get('/', [$pageController, 'navigation']);
 $router->get('/mall', [$pageController, 'mallHome']);
 $router->get('/mall/login', [$pageController, 'login']);
+$router->get('/mall/uploads/{filename}', [$pageController, 'uploadedFile']);
 $router->get('/mall/products/{slug}', [$pageController, 'productDetail']);
 $router->get('/mall/profile', [$pageController, 'profile']);
 $router->get('/mall/cart', [$pageController, 'cart']);

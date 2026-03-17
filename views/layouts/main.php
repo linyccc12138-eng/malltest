@@ -86,9 +86,6 @@
                     <button type="button" data-logout class="rounded-full border border-rose/25 px-4 py-2 text-sm text-ink transition hover:border-rose hover:text-rose">
                         退出
                     </button>
-                    <?php if (($currentUser['role'] ?? '') === 'admin'): ?>
-                        <a href="/mall/admin" class="hidden rounded-full bg-teal px-4 py-2 text-sm text-white shadow-card transition hover:bg-teal/90 sm:inline-flex">进入后台</a>
-                    <?php endif; ?>
                 <?php else: ?>
                     <a href="/mall/login" class="rounded-full bg-bronze px-4 py-2 text-sm text-white shadow-card transition hover:bg-bronze/90">登录</a>
                 <?php endif; ?>

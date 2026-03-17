@@ -1,6 +1,8 @@
 (() => {
     const bootstrap = window.MALL_BOOTSTRAP || {};
     const pageData = window.PAGE_DATA || {};
+    const tinymceApiKey = 'esazkmyz3gahrj2teqtvimt91wlrracqp3k2ig8zuushd1n6';
+    const tinymceScriptSrc = `https://cdn.tiny.cloud/1/${tinymceApiKey}/tinymce/7/tinymce.min.js`;
 
     const getCsrfToken = () => bootstrap.csrfToken || '';
     const formatMoney = (value) => Number(value || 0).toFixed(2);
@@ -19,6 +21,8 @@
         script.onerror = reject;
         document.head.appendChild(script);
     });
+
+    const ensureTinyMce = () => loadScriptOnce(tinymceScriptSrc);
 
     const notice = (message, type = 'success') => {
         if (!message) {
@@ -743,7 +747,7 @@
 
                 if (mode === 'edit') {
                     this.detailMode = 'edit';
-                    await loadScriptOnce('https://cdn.jsdelivr.net/npm/tinymce@7/tinymce.min.js');
+                    await ensureTinyMce();
                     this.$nextTick(() => {
                         const existingEditor = window.tinymce?.get('product-detail-editor-page');
                         if (existingEditor) {
@@ -755,11 +759,18 @@
                             selector: '#product-detail-editor-page',
                             height: 420,
                             menubar: false,
-                            plugins: 'lists link image table code',
+                            plugins: 'lists link image table code paste',
                             toolbar: 'undo redo | styles | bold italic | alignleft aligncenter alignright | bullist numlist | image link table | code',
+                            automatic_uploads: true,
+                            paste_data_images: true,
+                            convert_urls: false,
+                            relative_urls: false,
+                            remove_script_host: false,
+                            branding: false,
+                            promotion: false,
                             setup: (editor) => {
                                 editor.on('init', () => editor.setContent(this.productForm.detail_html || ''));
-                                editor.on('change keyup', () => {
+                                editor.on('change keyup input undo redo SetContent', () => {
                                     this.productForm.detail_html = editor.getContent();
                                 });
                             },
@@ -840,7 +851,7 @@
 
                 if (mode === 'edit') {
                     this.detailMode = 'edit';
-                    await loadScriptOnce('https://cdn.jsdelivr.net/npm/tinymce@7/tinymce.min.js');
+                    await ensureTinyMce();
                     this.$nextTick(() => {
                         const existingEditor = window.tinymce?.get('activity-detail-editor-page');
                         if (existingEditor) {
@@ -852,11 +863,18 @@
                             selector: '#activity-detail-editor-page',
                             height: 420,
                             menubar: false,
-                            plugins: 'lists link image table code',
+                            plugins: 'lists link image table code paste',
                             toolbar: 'undo redo | styles | bold italic | alignleft aligncenter alignright | bullist numlist | image link table | code',
+                            automatic_uploads: true,
+                            paste_data_images: true,
+                            convert_urls: false,
+                            relative_urls: false,
+                            remove_script_host: false,
+                            branding: false,
+                            promotion: false,
                             setup: (editor) => {
                                 editor.on('init', () => editor.setContent(this.activityForm.content_html || ''));
-                                editor.on('change keyup', () => {
+                                editor.on('change keyup input undo redo SetContent', () => {
                                     this.activityForm.content_html = editor.getContent();
                                 });
                             },
