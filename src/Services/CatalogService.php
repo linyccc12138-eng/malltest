@@ -143,10 +143,13 @@ class CatalogService
             'SELECT p.*, c.name AS category_name
              FROM products p
              LEFT JOIN categories c ON c.id = p.category_id
-             WHERE p.slug = :slug OR p.name = :slug
+             WHERE p.slug = :slug OR p.name = :name
              LIMIT 1'
         );
-        $stmt->execute([':slug' => $slug]);
+        $stmt->execute([
+            ':slug' => $slug,
+            ':name' => $slug,
+        ]);
         $row = $stmt->fetch();
         if (!$row) {
             return null;
