@@ -12,7 +12,7 @@
         </div>
 
         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-            <div class="h-full rounded-[1.6rem] border border-sage/15 bg-white/75 p-4 shadow-card">
+            <div class="hidden h-full rounded-[1.6rem] border border-sage/15 bg-white/75 p-4 shadow-card sm:block">
                 <div class="text-sm uppercase tracking-[0.3em] text-sage/70">会员权益</div>
                 <div class="mt-2 font-display text-xl text-ink"><?= $currentMember ? htmlspecialchars($currentMember['fclassesname'], ENT_QUOTES, 'UTF-8') : '未绑定会员' ?></div>
                 <p class="mt-2 text-sm text-ink/65">支持实时读取会员等级、余额与折扣。商品可单独配置是否参与会员折扣。</p>
@@ -22,23 +22,20 @@
 
     <section id="catalog" class="space-y-4 lg:grid lg:grid-cols-[280px_1fr] lg:gap-6 lg:space-y-0">
         <div
-            class="flex items-center justify-between border border-bronze/12 bg-white/80 px-4 py-3 shadow-card transition-all lg:hidden"
-            :class="mobileFiltersOpen ? 'rounded-t-[1.5rem] rounded-b-none border-b-transparent shadow-none' : 'rounded-[1.5rem]'"
+            x-show="!mobileFiltersOpen"
+            class="flex items-center justify-between rounded-[1.5rem] border border-bronze/12 bg-white/80 px-4 py-3 shadow-card transition-all lg:hidden"
         >
             <div>
                 <div class="text-sm uppercase tracking-[0.3em] text-bronze/70">商品筛选</div>
                 <div class="text-sm text-ink/60">按关键词、品牌和分类快速筛选</div>
             </div>
-            <button @click="mobileFiltersOpen = !mobileFiltersOpen" type="button" class="rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">
-                <span x-text="mobileFiltersOpen ? '收起' : '展开'"></span>
-            </button>
+            <button @click="mobileFiltersOpen = true" type="button" class="rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">展开</button>
         </div>
 
         <aside
             x-show="mobileFiltersOpen || window.innerWidth >= 1024"
             x-transition.opacity.duration.180ms
-            class="space-y-4 rounded-[1.8rem] border border-bronze/15 bg-white/80 p-5 shadow-card"
-            :class="mobileFiltersOpen ? 'mt-0 rounded-t-none border-t-0 pt-4' : 'mt-4 lg:mt-0'"
+            class="mt-4 space-y-4 rounded-[1.8rem] border border-bronze/15 bg-white/80 p-5 shadow-card lg:mt-0"
             x-cloak
         >
             <div>
@@ -80,7 +77,10 @@
                 </select>
             </label>
 
-            <button @click="resetFilters" type="button" class="w-full rounded-full border border-bronze/15 px-4 py-3 text-sm text-bronze transition hover:border-bronze hover:bg-bronze/5">重置条件</button>
+            <div class="grid grid-cols-2 gap-2 lg:block">
+                <button @click="resetFilters" type="button" class="w-full rounded-full border border-bronze/15 px-4 py-3 text-sm text-bronze transition hover:border-bronze hover:bg-bronze/5">重置条件</button>
+                <button @click="mobileFiltersOpen = false" type="button" class="rounded-full border border-bronze/15 px-4 py-3 text-sm text-bronze transition hover:border-bronze hover:bg-bronze/5 lg:hidden">收起</button>
+            </div>
         </aside>
 
         <div class="space-y-6">
@@ -91,29 +91,29 @@
                 <button x-show="products.meta.has_more" @click="loadMore" class="rounded-full border border-bronze/20 px-4 py-2 text-sm text-bronze transition hover:border-bronze hover:bg-bronze/5">加载更多</button>
             </div>
 
-            <div class="grid grid-cols-2 gap-3 lg:gap-4 xl:grid-cols-3">
+            <div class="grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-3">
                 <template x-for="item in products.data" :key="item.id">
-                    <article class="group rounded-[10px] border border-bronze/12 bg-white/85 p-3 shadow-card transition duration-300 hover:-translate-y-1 hover:shadow-glow sm:p-4">
-                        <a :href="'/mall/products/' + item.id" class="block overflow-hidden rounded-[10px] bg-parchment/70">
+                    <article class="group rounded-[8px] border border-bronze/12 bg-white/85 p-2 shadow-card transition duration-300 hover:-translate-y-1 hover:shadow-glow sm:rounded-[10px] sm:p-4">
+                        <a :href="'/mall/products/' + item.id" class="block overflow-hidden rounded-[8px] bg-parchment/70 sm:rounded-[10px]">
                             <img :src="item.cover_image || ''" :alt="item.name || ''" class="mall-square-media transition duration-500 group-hover:scale-[1.04]">
                         </a>
-                        <div class="mt-3">
+                        <div class="mt-2 sm:mt-3">
                             <div class="min-w-0">
                                 <h3 class="truncate font-semibold text-ink" x-text="item.name"></h3>
-                                <p class="mt-1 min-h-[2.5rem] line-clamp-2 text-xs text-ink/60 sm:min-h-[3rem] sm:text-sm" x-text="item.summary || ''"></p>
+                                <p class="mt-0.5 min-h-[2.25rem] line-clamp-2 text-xs leading-[1.125rem] text-ink/60 sm:mt-1 sm:min-h-[3rem] sm:text-sm sm:leading-5" x-text="item.summary || ''"></p>
                             </div>
                         </div>
-                        <div class="mt-3 flex items-end justify-between gap-2">
+                        <div class="mt-2 flex items-end justify-between gap-2 sm:mt-3">
                             <div>
                                 <div class="text-base font-semibold text-bronze sm:text-lg">￥<span x-text="formatMoney(item.price)"></span></div>
                                 <div class="text-[11px] text-ink/45 sm:text-xs">评分 <span x-text="item.rating"></span> / 库存 <span x-text="item.stock_total"></span></div>
                             </div>
                         </div>
-                        <div class="mt-3 flex gap-2">
-                            <button @click="openQuickView(item.id)" type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-bronze text-white shadow-card transition hover:bg-bronze/90" aria-label="加入购物车">
-                                <img src="<?= asset('images/icon-cart.svg') ?>" alt="" class="h-4 w-4">
+                        <div class="mt-2 flex gap-1.5 sm:mt-3 sm:gap-2">
+                            <button @click="openQuickView(item.id)" type="button" class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-bronze text-white shadow-card transition hover:bg-bronze/90 sm:h-10 sm:w-10" aria-label="加入购物车">
+                                <img src="<?= asset('images/icon-cart.svg') ?>" alt="" class="h-3.5 w-3.5 sm:h-4 sm:w-4">
                             </button>
-                            <a :href="'/mall/products/' + item.id" class="rounded-full border border-bronze/20 px-3 py-2 text-xs text-bronze transition hover:border-bronze hover:bg-bronze/5 sm:text-sm">详情</a>
+                            <a :href="'/mall/products/' + item.id" class="rounded-full border border-bronze/20 px-2.5 py-1 text-[11px] text-bronze transition hover:border-bronze hover:bg-bronze/5 sm:px-3 sm:py-2 sm:text-sm">详情</a>
                         </div>
                     </article>
                 </template>
@@ -187,7 +187,7 @@
 
     <template x-teleport="body">
         <div x-show="quickView.open" x-cloak x-transition.opacity.duration.180ms class="modal-overlay" @click.self="quickView.open = false">
-            <div x-transition.scale.opacity.duration.220ms class="mall-quick-view-panel modal-panel w-full max-w-3xl overflow-y-auto rounded-[1.5rem] border border-bronze/10 bg-white/95 p-4 shadow-glow sm:rounded-[2rem] sm:p-6">
+            <div x-transition.scale.opacity.duration.220ms class="mall-quick-view-panel modal-panel w-full max-w-3xl overflow-hidden rounded-[1.5rem] border border-bronze/10 bg-white/95 p-4 shadow-glow sm:rounded-[2rem] sm:p-6">
                 <div class="flex items-start justify-between gap-3 sm:gap-4">
                     <div>
                         <div class="text-xs uppercase tracking-[0.28em] text-bronze/65 sm:text-sm sm:tracking-[0.3em]">加入购物车</div>

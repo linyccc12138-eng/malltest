@@ -4,12 +4,24 @@
         <div class="rounded-[2rem] border border-bronze/15 bg-white/80 p-5 shadow-card">
             <div class="grid gap-4 sm:grid-cols-[100px_1fr]">
                 <div class="order-2 flex gap-3 overflow-x-auto pb-2 sm:order-1 sm:flex-col">
-                    <template x-for="(image, index) in gallery" :key="index">
-                        <button @click="activeImage = image" class="h-20 min-w-20 rounded-2xl border border-bronze/15 bg-cover bg-center" :style="`background-image:url(${image})`"></button>
+                    <template x-for="(image, index) in galleryImages()" :key="`${image}-${index}`">
+                        <button
+                            @click="selectGalleryImage(image)"
+                            :class="activeImage === image ? 'border-bronze shadow-card' : 'border-bronze/15'"
+                            class="overflow-hidden rounded-2xl border bg-parchment/60 transition"
+                        >
+                            <img :src="image" :alt="product.name || ''" class="h-20 min-w-20 object-cover">
+                        </button>
                     </template>
                 </div>
-                <div class="order-1 overflow-hidden rounded-[1.6rem] bg-parchment/70 sm:order-2">
-                    <div class="aspect-[4/5] bg-cover bg-center transition duration-500" :style="`background-image:url(${activeImage})`"></div>
+                <div
+                    class="order-1 overflow-hidden rounded-[1.6rem] bg-parchment/70 sm:order-2"
+                    @touchstart.passive="startSwipe('gallery', $event)"
+                    @touchend.passive="endSwipe('gallery', $event)"
+                >
+                    <button @click="openGalleryViewer()" type="button" class="block w-full cursor-zoom-in">
+                        <img :src="activeImage" :alt="product.name || ''" class="block aspect-[4/5] w-full object-cover transition duration-500">
+                    </button>
                 </div>
             </div>
         </div>
@@ -62,6 +74,22 @@
                 <div class="text-sm uppercase tracking-[0.3em] text-bronze/70">商品详情</div>
             </div>
         </div>
-        <article class="prose prose-stone mt-6 max-w-none" x-html="product.detail_html"></article>
+        <article data-product-detail-body class="product-detail-rich prose prose-stone mt-6 max-w-none" x-html="product.detail_html"></article>
     </div>
+
+    <template x-teleport="body">
+        <div x-show="viewer.open" x-cloak x-transition.opacity.duration.180ms class="image-viewer-overlay" @click.self="closeViewer()" @keydown.window.escape="closeViewer()">
+            <button @click="closeViewer()" type="button" class="image-viewer-close" aria-label="关闭图片预览">×</button>
+            <button x-show="viewer.images.length > 1" @click="viewerPrev()" type="button" class="image-viewer-nav image-viewer-nav-left" aria-label="上一张">‹</button>
+            <div class="image-viewer-stage" @touchstart.passive="startSwipe('viewer', $event)" @touchend.passive="endSwipe('viewer', $event)">
+                <img :src="viewerCurrentImage()" :alt="product.name || ''" class="image-viewer-image">
+            </div>
+            <button x-show="viewer.images.length > 1" @click="viewerNext()" type="button" class="image-viewer-nav image-viewer-nav-right" aria-label="下一张">›</button>
+            <div x-show="viewer.images.length > 1" class="image-viewer-counter">
+                <span x-text="viewer.index + 1"></span>
+                /
+                <span x-text="viewer.images.length"></span>
+            </div>
+        </div>
+    </template>
 </section>

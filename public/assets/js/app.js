@@ -24,6 +24,8 @@
 
     const ensureTinyMce = () => loadScriptOnce(tinymceScriptSrc);
     const uniqueList = (items = []) => items.filter(Boolean).filter((item, index, array) => array.indexOf(item) === index);
+    const touchPointX = (event) => event.changedTouches?.[0]?.clientX ?? event.touches?.[0]?.clientX ?? 0;
+    const touchPointY = (event) => event.changedTouches?.[0]?.clientY ?? event.touches?.[0]?.clientY ?? 0;
 
     const fallbackBackPath = (pathname) => {
         if (pathname.startsWith('/mall/admin/products/edit')) {
@@ -643,10 +645,15 @@
             product: pageData.product || {},
             gallery: [],
             activeImage: '',
+            detailImages: [],
             quantity: 1,
             skuOptions: {},
             selectedOptions: {},
             currentSku: null,
+            viewer: { open: false, images: [], index: 0 },
+            swipeStartX: 0,
+            swipeStartY: 0,
+            swipeTarget: '',
             init() {
                 this.gallery = uniqueList([this.product.cover_image, ...(this.product.gallery || [])]);
                 this.activeImage = this.gallery[0] || '';
@@ -655,6 +662,122 @@
                     this.selectedOptions[name] = values[0];
                 });
                 this.resolveSku();
+                this.$nextTick(() => {
+                    this.syncDetailImages();
+                });
+            },
+            galleryImages() {
+                return uniqueList([...(this.gallery || []), this.activeImage]);
+            },
+            selectGalleryImage(image) {
+                this.activeImage = image;
+            },
+            activeGalleryIndex() {
+                const images = this.galleryImages();
+                const index = images.indexOf(this.activeImage);
+                return index >= 0 ? index : 0;
+            },
+            shiftGallery(step) {
+                const images = this.galleryImages();
+                if (images.length < 2) {
+                    return;
+                }
+
+                const nextIndex = (this.activeGalleryIndex() + step + images.length) % images.length;
+                this.activeImage = images[nextIndex];
+            },
+            openGalleryViewer() {
+                this.openViewer(this.galleryImages(), this.activeGalleryIndex());
+            },
+            openViewer(images = [], index = 0) {
+                const normalized = uniqueList(images);
+                if (!normalized.length) {
+                    return;
+                }
+
+                this.viewer.images = normalized;
+                this.viewer.index = Math.max(0, Math.min(index, normalized.length - 1));
+                this.viewer.open = true;
+                document.body.style.overflow = 'hidden';
+            },
+            closeViewer() {
+                this.viewer.open = false;
+                document.body.style.overflow = '';
+            },
+            viewerCurrentImage() {
+                return this.viewer.images[this.viewer.index] || '';
+            },
+            viewerPrev() {
+                if (this.viewer.images.length < 2) {
+                    return;
+                }
+                this.viewer.index = (this.viewer.index - 1 + this.viewer.images.length) % this.viewer.images.length;
+            },
+            viewerNext() {
+                if (this.viewer.images.length < 2) {
+                    return;
+                }
+                this.viewer.index = (this.viewer.index + 1) % this.viewer.images.length;
+            },
+            startSwipe(target, event) {
+                this.swipeTarget = target;
+                this.swipeStartX = touchPointX(event);
+                this.swipeStartY = touchPointY(event);
+            },
+            endSwipe(target, event) {
+                if (this.swipeTarget !== target) {
+                    return;
+                }
+
+                const deltaX = touchPointX(event) - this.swipeStartX;
+                const deltaY = touchPointY(event) - this.swipeStartY;
+                this.swipeTarget = '';
+
+                if (Math.abs(deltaX) < 40 || Math.abs(deltaX) <= Math.abs(deltaY)) {
+                    return;
+                }
+
+                const step = deltaX < 0 ? 1 : -1;
+                if (target === 'gallery') {
+                    this.shiftGallery(step);
+                    return;
+                }
+
+                if (step > 0) {
+                    this.viewerNext();
+                    return;
+                }
+
+                this.viewerPrev();
+            },
+            syncDetailImages() {
+                const article = this.$root.querySelector('[data-product-detail-body]');
+                if (!article) {
+                    return;
+                }
+
+                this.detailImages = uniqueList(Array.from(article.querySelectorAll('img')).map((image) => image.currentSrc || image.getAttribute('src') || ''));
+                article.querySelectorAll('img').forEach((image) => {
+                    image.classList.add('product-detail-zoomable');
+                    image.dataset.detailImage = '1';
+                });
+
+                if (article.dataset.viewerBound === '1') {
+                    return;
+                }
+
+                article.dataset.viewerBound = '1';
+                article.addEventListener('click', (event) => {
+                    const image = event.target.closest('img[data-detail-image]');
+                    if (!image) {
+                        return;
+                    }
+
+                    const src = image.currentSrc || image.getAttribute('src') || '';
+                    const images = this.detailImages.length ? this.detailImages : [src];
+                    const index = Math.max(0, images.indexOf(src));
+                    this.openViewer(images, index);
+                });
             },
             selectOption(name, value) {
                 this.selectedOptions[name] = value;
