@@ -58,18 +58,23 @@
 
     <header class="sticky top-0 z-40 border-b border-bronze/15 bg-parchment/90 backdrop-blur">
         <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 lg:px-6">
-            <a href="/" class="flex items-center gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-full border border-bronze/40 bg-white/70 shadow-card">
-                    <span class="text-lg font-bold text-bronze">妙</span>
-                </div>
-                <div>
-                    <div class="font-display text-lg tracking-[0.2em] text-bronze">奇妙集市</div>
-                    <div class="text-xs text-ink/60">会员联动电商网站</div>
-                </div>
-            </a>
+            <div class="flex items-center gap-3">
+                <button type="button" data-nav-back class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-bronze/25 bg-white/70 text-lg text-bronze shadow-card md:hidden" aria-label="返回">
+                    <span aria-hidden="true">‹</span>
+                </button>
+                <a href="/portal" class="flex items-center gap-3">
+                    <div class="flex h-11 w-11 items-center justify-center rounded-full border border-bronze/40 bg-white/70 shadow-card">
+                        <span class="text-lg font-bold text-bronze">妙</span>
+                    </div>
+                    <div>
+                        <div class="font-display text-lg tracking-[0.2em] text-bronze">奇妙集市</div>
+                        <div class="text-xs text-ink/60">会员联动电商网站</div>
+                    </div>
+                </a>
+            </div>
 
             <nav class="hidden items-center gap-5 text-sm text-ink/70 md:flex">
-                <a class="hover:text-bronze" href="/">导航页</a>
+                <a class="hover:text-bronze" href="/portal">导航页</a>
                 <a class="hover:text-bronze" href="/mall">商城首页</a>
                 <a class="hover:text-bronze" href="/mall/profile">用户中心</a>
                 <a class="hover:text-bronze" href="/mall/cart">购物车</a>
@@ -123,6 +128,7 @@
             'appName' => $appName ?? '奇妙集市',
         ]) ?>;
     </script>
+    <button type="button" data-back-to-top class="back-top-button" aria-label="返回顶部">↑</button>
     <script src="<?= asset('js/app.js') ?>"></script>
 </body>
 </html>

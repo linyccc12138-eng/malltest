@@ -72,6 +72,7 @@ $adminApiController = new Mall\Controllers\AdminApiController($app, $dashboardSe
 $router = $app->router();
 
 $router->get('/', [$pageController, 'navigation']);
+$router->get('/portal', [$pageController, 'navigation']);
 $router->get('/mall', [$pageController, 'mallHome']);
 $router->get('/mall/login', [$pageController, 'login']);
 $router->get('/mall/uploads/{filename}', [$pageController, 'uploadedFile']);

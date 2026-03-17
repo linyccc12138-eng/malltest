@@ -171,8 +171,11 @@ class CatalogService
         return [
             'id' => $product['id'],
             'name' => $product['name'],
+            'summary' => $product['summary'],
+            'brand' => $product['brand'],
             'subtitle' => $product['subtitle'],
             'cover_image' => $product['cover_image'],
+            'gallery' => $product['gallery'],
             'price' => $product['price'],
             'market_price' => $product['market_price'],
             'quick_view_text' => $product['quick_view_text'],

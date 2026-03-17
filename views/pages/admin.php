@@ -123,23 +123,34 @@
                 <template x-for="item in categories" :key="item.id">
                     <div
                         class="rounded-[1.4rem] border border-bronze/10 bg-parchment/55 p-4"
-                        draggable="true"
-                        @dragstart="dragCategory(item.id)"
-                        @drop.prevent="dropCategory(item.id)"
-                        @dragover.prevent
                     >
                         <div class="flex items-center justify-between gap-3">
-                            <div class="min-w-0">
-                                <div class="font-medium text-ink" x-text="categoryLabel(item)"></div>
+                            <button @click="toggleCategoryExpand(item)" type="button" class="flex min-w-0 flex-1 items-center gap-3 text-left">
+                                <span
+                                    :class="item.has_children ? 'opacity-100' : 'opacity-0'"
+                                    class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-bronze/15 bg-white/80 text-xs text-bronze transition"
+                                    x-text="item.expanded ? '−' : '+'"
+                                ></span>
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-2" :style="`padding-left:${item.depth * 16}px`">
+                                        <span class="font-medium text-ink" x-text="item.name"></span>
+                                        <span x-show="item.has_children" class="rounded-full bg-bronze/10 px-2 py-0.5 text-[11px] text-bronze">上级分类</span>
+                                    </div>
+                                    <div class="mt-1 text-xs text-ink/55">
+                                        ID <span x-text="item.id"></span>
+                                        <span class="mx-1">/</span>
+                                        层级 <span x-text="item.level"></span>
+                                        <span class="mx-1">/</span>
+                                        父级 <span x-text="parentCategoryName(item.parent_id)"></span>
+                                    </div>
+                                </div>
+                            </button>
+                            <div class="min-w-0 text-right">
                                 <div class="mt-1 text-xs text-ink/55">
-                                    ID <span x-text="item.id"></span>
-                                    <span class="mx-1">/</span>
-                                    层级 <span x-text="item.level"></span>
-                                    <span class="mx-1">/</span>
-                                    父级 <span x-text="parentCategoryName(item.parent_id)"></span>
+                                    <span x-text="item.has_children ? '点击左侧展开/收起子分类' : '末级分类'"></span>
                                 </div>
                             </div>
-                            <button @click="openCategoryModal(item)" class="rounded-full border border-bronze/15 px-3 py-2 text-xs text-bronze">编辑</button>
+                            <button @click="openCategoryModal(item)" type="button" class="rounded-full border border-bronze/15 px-3 py-2 text-xs text-bronze">编辑</button>
                         </div>
                     </div>
                 </template>
@@ -589,13 +600,35 @@
                     </label>
                     <label class="block text-sm text-ink/70">
                         绑定会员
-                        <select x-model="userForm.membership_member_id" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55">
-                            <option value="">不绑定会员</option>
-                            <template x-for="item in memberOptions" :key="`user-member-${item.fid}`">
-                                <option :value="String(item.fid)" x-text="`${item.fname}（${item.fnumber}）`"></option>
-                            </template>
-                        </select>
+                        <input
+                            x-model="userMemberKeyword"
+                            @input="scheduleMemberSearch()"
+                            type="text"
+                            class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"
+                            placeholder="输入会员编码或名称进行搜索"
+                            autocomplete="off"
+                        >
                     </label>
+                    <div class="rounded-[1.4rem] border border-bronze/10 bg-parchment/45 p-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div class="text-sm text-ink/60">
+                                当前绑定：
+                                <span class="font-medium text-ink" x-text="userForm.membership_member_id || '未绑定会员'"></span>
+                            </div>
+                            <button x-show="userForm.membership_member_id" @click="clearUserMemberBinding()" type="button" class="rounded-full border border-rose/20 px-3 py-1.5 text-xs text-rose">清空绑定</button>
+                        </div>
+                        <div class="mt-3 space-y-2" x-show="memberOptions.length">
+                            <template x-for="item in memberOptions" :key="`user-member-${item.fid}`">
+                                <button @click="selectUserMember(item)" type="button" class="flex w-full items-center justify-between rounded-[1.1rem] border border-bronze/10 bg-white/80 px-3 py-2 text-left transition hover:border-bronze/25 hover:bg-white">
+                                    <span class="text-sm text-ink">
+                                        <span x-text="item.fname"></span>
+                                        <span class="text-ink/55" x-text="`（${item.fnumber}）`"></span>
+                                    </span>
+                                    <span class="text-xs text-ink/50" x-text="item.fclassesname || '未分级'"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
                     <div class="flex justify-end gap-2">
                         <button type="button" @click="closeUserModal()" class="rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">取消</button>
                         <button type="submit" class="rounded-full bg-sage px-4 py-2 text-sm text-white">保存用户</button>

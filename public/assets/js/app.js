@@ -23,6 +23,29 @@
     });
 
     const ensureTinyMce = () => loadScriptOnce(tinymceScriptSrc);
+    const uniqueList = (items = []) => items.filter(Boolean).filter((item, index, array) => array.indexOf(item) === index);
+
+    const fallbackBackPath = (pathname) => {
+        if (pathname.startsWith('/mall/admin/products/edit')) {
+            return '/mall/admin?tab=products';
+        }
+        if (pathname.startsWith('/mall/admin/activities/edit')) {
+            return '/mall/admin?tab=activities';
+        }
+        if (pathname.startsWith('/mall/admin')) {
+            return '/mall';
+        }
+        if (pathname.startsWith('/mall/products/')) {
+            return '/mall';
+        }
+        if (pathname.startsWith('/mall/profile') || pathname.startsWith('/mall/cart') || pathname.startsWith('/mall/checkout') || pathname.startsWith('/mall/login')) {
+            return '/mall';
+        }
+        if (pathname.startsWith('/mall')) {
+            return '/portal';
+        }
+        return '/mall';
+    };
 
     const notice = (message, type = 'success') => {
         if (!message) {
@@ -47,6 +70,48 @@
         const header = document.querySelector('header');
         const offset = header ? Math.ceil(header.getBoundingClientRect().height) + 16 : 80;
         document.documentElement.style.setProperty('--mall-header-offset', `${offset}px`);
+    };
+
+    const bindBackNavigation = () => {
+        document.querySelectorAll('[data-nav-back]').forEach((button) => {
+            if (button.dataset.bound === '1') {
+                return;
+            }
+
+            button.dataset.bound = '1';
+            button.addEventListener('click', () => {
+                const referrer = document.referrer || '';
+                const hasInternalHistory = window.history.length > 1 && referrer.startsWith(window.location.origin);
+                if (hasInternalHistory) {
+                    window.history.back();
+                    return;
+                }
+                window.location.href = fallbackBackPath(window.location.pathname);
+            });
+        });
+    };
+
+    const syncBackToTopButton = () => {
+        const button = document.querySelector('[data-back-to-top]');
+        if (!button) {
+            return;
+        }
+
+        button.classList.toggle('is-visible', window.scrollY > 240);
+    };
+
+    const bindBackToTop = () => {
+        const button = document.querySelector('[data-back-to-top]');
+        if (!button || button.dataset.bound === '1') {
+            syncBackToTopButton();
+            return;
+        }
+
+        button.dataset.bound = '1';
+        button.addEventListener('click', () => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        syncBackToTopButton();
     };
 
     const apiRequest = async (url, options = {}) => {
@@ -138,9 +203,8 @@
     const defaultHomeFilters = () => ({
         keyword: '',
         brand: '',
+        category_id: '',
         sort: 'newest',
-        price_min: '',
-        price_max: '',
         page: 1,
         page_size: 8,
     });
@@ -178,6 +242,63 @@
     };
 
     const categoryOptionLabel = (item) => `${'· '.repeat(item.depth || 0)}${item.name}`;
+    const defaultProductSkuForm = (item = {}) => ({
+        id: item.id ?? null,
+        label: item.label || Object.values(item.attributes || {}).join(' / ') || '',
+        price: item.price ?? '',
+        stock: item.stock ?? '',
+        cover_image: item.cover_image || '',
+    });
+
+    const normalizeProductSkuForms = (skus = [], fallback = {}) => {
+        if (!Array.isArray(skus) || skus.length === 0) {
+            return [defaultProductSkuForm({
+                label: fallback.is_course ? '课程版' : '默认规格',
+                price: fallback.price ?? '',
+                stock: fallback.stock_total ?? '',
+                cover_image: fallback.cover_image || '',
+            })];
+        }
+
+        return skus.map((sku) => defaultProductSkuForm({
+            ...sku,
+            label: Object.values(sku.attributes || {}).join(' / ') || sku.label || sku.sku_code || '',
+        }));
+    };
+
+    const serializeProductSkus = (skus = [], fallbackCoverImage = '') => {
+        return skus
+            .map((sku, index) => ({
+                sku_code: sku.id ? undefined : `SKU-${Date.now()}-${index + 1}`,
+                price: Number(sku.price || 0),
+                stock: Number(sku.stock || 0),
+                cover_image: sku.cover_image || fallbackCoverImage,
+                attributes: { 规格: (sku.label || '').trim() || `规格${index + 1}` },
+            }))
+            .filter((sku) => sku.stock >= 0);
+    };
+
+    const buildVisibleCategoryRows = (items, expandedIds = new Set(), bucket = [], depth = 0, parentVisible = true) => {
+        (items || []).forEach((item) => {
+            if (!parentVisible) {
+                return;
+            }
+
+            const hasChildren = Array.isArray(item.children) && item.children.length > 0;
+            bucket.push({
+                ...item,
+                depth,
+                has_children: hasChildren,
+                expanded: expandedIds.has(Number(item.id)),
+            });
+
+            if (hasChildren) {
+                buildVisibleCategoryRows(item.children, expandedIds, bucket, depth + 1, expandedIds.has(Number(item.id)));
+            }
+        });
+
+        return bucket;
+    };
 
     const normalizeProductForm = (item = {}) => ({
         id: item.id ?? null,
@@ -199,6 +320,8 @@
         quick_view_text: item.quick_view_text || '',
         detail_html: item.detail_html || '',
         stock_total: item.stock_total ?? 1,
+        gallery_images: uniqueList((item.gallery || []).filter((image) => image && image !== item.cover_image)),
+        skus: normalizeProductSkuForms(item.skus || [], item),
     });
 
     const normalizeActivityForm = (item = {}) => ({
@@ -270,14 +393,19 @@
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
             syncHeaderOffset();
+            bindBackNavigation();
+            bindBackToTop();
             bindLogoutAction();
         }, { once: true });
     } else {
         syncHeaderOffset();
+        bindBackNavigation();
+        bindBackToTop();
         bindLogoutAction();
     }
 
     window.addEventListener('resize', syncHeaderOffset);
+    window.addEventListener('scroll', syncBackToTopButton, { passive: true });
 
     document.addEventListener('alpine:init', () => {
         Alpine.data('loginPage', () => ({
@@ -310,18 +438,26 @@
                 brands: pageData.home?.brands || [],
                 categories: pageData.home?.categories || [],
             },
+            categoryOptions: flattenCategories(pageData.home?.categories || []),
             filters: defaultHomeFilters(),
-            quickView: { open: false, data: null },
+            quickView: { open: false, data: null, quantity: 1, skuOptions: {}, selectedOptions: {}, currentSku: null },
+            mobileFiltersOpen: window.innerWidth >= 1024,
             filterTimer: null,
             filterWatchSuspended: false,
+            categoryLabel: categoryOptionLabel,
             init() {
-                ['keyword', 'brand', 'sort', 'price_min', 'price_max'].forEach((key) => {
+                ['keyword', 'brand', 'category_id', 'sort'].forEach((key) => {
                     this.$watch(`filters.${key}`, () => {
                         if (this.filterWatchSuspended) {
                             return;
                         }
                         this.scheduleFilterReload();
                     });
+                });
+                window.addEventListener('resize', () => {
+                    if (window.innerWidth >= 1024) {
+                        this.mobileFiltersOpen = true;
+                    }
                 });
                 void this.reload(true);
             },
@@ -338,6 +474,7 @@
                 try {
                     const payload = await apiRequest(`/mall/api/products?${new URLSearchParams(this.filters).toString()}`);
                     this.filterOptions = payload.filters || this.filterOptions;
+                    this.categoryOptions = flattenCategories(payload.filters?.categories || this.filterOptions.categories || []);
                     this.products = payload;
                 } catch (error) {
                     notice(error.message, 'error');
@@ -363,7 +500,54 @@
             async openQuickView(id) {
                 try {
                     this.quickView.data = await apiRequest(`/mall/api/products/${id}/quick-view`);
+                    this.quickView.quantity = 1;
+                    this.quickView.skuOptions = buildSkuOptions(this.quickView.data?.skus || []);
+                    this.quickView.selectedOptions = {};
+                    Object.entries(this.quickView.skuOptions).forEach(([name, values]) => {
+                        this.quickView.selectedOptions[name] = values[0];
+                    });
+                    this.resolveQuickViewSku();
                     this.quickView.open = true;
+                } catch (error) {
+                    notice(error.message, 'error');
+                }
+            },
+            selectQuickViewOption(name, value) {
+                this.quickView.selectedOptions[name] = value;
+                this.resolveQuickViewSku();
+            },
+            resolveQuickViewSku() {
+                this.quickView.currentSku = (this.quickView.data?.skus || []).find((sku) => {
+                    return Object.entries(this.quickView.selectedOptions).every(([name, value]) => (sku.attributes || {})[name] === value);
+                }) || (this.quickView.data?.skus || [])[0] || null;
+            },
+            quickViewPrice() {
+                return this.quickView.currentSku?.price || this.quickView.data?.price || 0;
+            },
+            quickViewStock() {
+                return this.quickView.currentSku?.stock || this.quickView.data?.stock_total || 0;
+            },
+            async addQuickViewToCart() {
+                if (!bootstrap.currentUser) {
+                    window.location.href = '/mall/login';
+                    return;
+                }
+                if (!this.quickView.currentSku || !this.quickView.data?.id) {
+                    notice('请选择可购买规格。', 'error');
+                    return;
+                }
+
+                try {
+                    await apiRequest('/mall/api/cart', {
+                        method: 'POST',
+                        body: {
+                            product_id: this.quickView.data.id,
+                            sku_id: this.quickView.currentSku.id,
+                            quantity: Number(this.quickView.quantity) || 1,
+                        },
+                    });
+                    notice('已加入购物车。');
+                    this.quickView.open = false;
                 } catch (error) {
                     notice(error.message, 'error');
                 }
@@ -380,7 +564,7 @@
             selectedOptions: {},
             currentSku: null,
             init() {
-                this.gallery = [this.product.cover_image, ...(this.product.gallery || [])].filter(Boolean);
+                this.gallery = uniqueList([this.product.cover_image, ...(this.product.gallery || [])]);
                 this.activeImage = this.gallery[0] || '';
                 this.skuOptions = buildSkuOptions(this.product.skus || []);
                 Object.entries(this.skuOptions).forEach(([name, values]) => {
@@ -396,6 +580,9 @@
                 this.currentSku = (this.product.skus || []).find((sku) => {
                     return Object.entries(this.selectedOptions).every(([name, value]) => (sku.attributes || {})[name] === value);
                 }) || (this.product.skus || [])[0] || null;
+                if (this.currentSku?.cover_image) {
+                    this.activeImage = this.currentSku.cover_image;
+                }
             },
             get currentPrice() {
                 return this.currentSku?.price || this.product.price || 0;
@@ -743,7 +930,7 @@
             categories: flattenCategories(pageData.categories || []),
             productForm: normalizeProductForm(pageData.product || {}),
             detailMode: 'preview',
-            uploading: { cover: false },
+            uploading: { cover: false, gallery: false },
             init() {
                 const syncCategorySelection = (value) => {
                     const normalized = value !== undefined && value !== null && value !== '' ? String(value) : '';
@@ -768,6 +955,24 @@
                 }
             },
             categoryLabel: categoryOptionLabel,
+            addSkuRow() {
+                this.productForm.skus = [
+                    ...(this.productForm.skus || []),
+                    defaultProductSkuForm({
+                        label: `规格${(this.productForm.skus || []).length + 1}`,
+                        price: this.productForm.price || '',
+                        stock: this.productForm.stock_total || '',
+                        cover_image: this.productForm.cover_image || '',
+                    }),
+                ];
+            },
+            removeSkuRow(index) {
+                if ((this.productForm.skus || []).length <= 1) {
+                    notice('请至少保留一个规格。', 'error');
+                    return;
+                }
+                this.productForm.skus.splice(index, 1);
+            },
             async switchDetailMode(mode) {
                 if (mode === this.detailMode) {
                     return;
@@ -829,6 +1034,36 @@
                     event.target.value = '';
                 }
             },
+            async uploadGalleryImages(event) {
+                const files = Array.from(event.target.files || []);
+                if (!files.length) {
+                    return;
+                }
+
+                const remaining = Math.max(0, 10 - (this.productForm.gallery_images || []).length);
+                if (remaining <= 0) {
+                    notice('附加图片最多 10 张。', 'error');
+                    event.target.value = '';
+                    return;
+                }
+
+                this.uploading.gallery = true;
+                try {
+                    const uploads = [];
+                    for (const file of files.slice(0, remaining)) {
+                        uploads.push(await uploadAdminFile(file));
+                    }
+                    this.productForm.gallery_images = uniqueList([...(this.productForm.gallery_images || []), ...uploads]).slice(0, 10);
+                } catch (error) {
+                    notice(error.message, 'error');
+                } finally {
+                    this.uploading.gallery = false;
+                    event.target.value = '';
+                }
+            },
+            removeGalleryImage(index) {
+                this.productForm.gallery_images.splice(index, 1);
+            },
             async saveProduct() {
                 try {
                     const editor = window.tinymce?.get('product-detail-editor-page');
@@ -846,13 +1081,8 @@
                         rating: Number(this.productForm.rating || 0),
                         sales_count: Number(this.productForm.sales_count || 0),
                         stock_total: Number(this.productForm.stock_total || 0),
-                        gallery: [this.productForm.cover_image].filter(Boolean),
-                        skus: [{
-                            price: Number(this.productForm.price || 0),
-                            stock: Number(this.productForm.stock_total || 0),
-                            cover_image: this.productForm.cover_image,
-                            attributes: { 规格: this.productForm.is_course ? '课程版' : '默认规格' },
-                        }],
+                        gallery: uniqueList([this.productForm.cover_image, ...(this.productForm.gallery_images || [])]).slice(0, 11),
+                        skus: serializeProductSkus(this.productForm.skus || [], this.productForm.cover_image),
                     };
                     const saved = await apiRequest(url, { method, body: payload });
                     this.productForm = normalizeProductForm(saved);
@@ -980,7 +1210,10 @@
             products: [],
             selectedProductIds: [],
             productPager: defaultPager(15),
+            categoryTree: [],
+            allCategories: [],
             categories: [],
+            expandedCategoryIds: [],
             categoryForm: defaultCategoryForm(),
             draggedCategoryId: null,
             adminOrders: [],
@@ -997,6 +1230,8 @@
             users: [],
             userForm: defaultUserForm(),
             userPager: defaultPager(15),
+            userMemberKeyword: '',
+            memberSearchTimer: null,
             memberOptions: [],
             members: [],
             memberClasses: [],
@@ -1146,26 +1381,48 @@
             async loadCategories() {
                 try {
                     const tree = await apiRequest('/mall/api/admin/categories');
-                    this.categories = flattenCategories(tree);
+                    this.categoryTree = tree || [];
+                    this.allCategories = flattenCategories(this.categoryTree);
+                    this.expandedCategoryIds = this.allCategories
+                        .filter((item) => Number(item.depth || 0) === 0)
+                        .map((item) => Number(item.id));
+                    this.rebuildCategoryRows();
                 } catch (error) {
                     notice(error.message, 'error');
                 }
             },
+            rebuildCategoryRows() {
+                this.categories = buildVisibleCategoryRows(this.categoryTree, new Set(this.expandedCategoryIds));
+                this.allCategories = flattenCategories(this.categoryTree);
+            },
             categoryLabel(item) {
                 return categoryOptionLabel(item);
+            },
+            toggleCategoryExpand(item) {
+                if (!item.has_children) {
+                    return;
+                }
+
+                const id = Number(item.id);
+                if (this.expandedCategoryIds.includes(id)) {
+                    this.expandedCategoryIds = this.expandedCategoryIds.filter((value) => value !== id);
+                } else {
+                    this.expandedCategoryIds = [...this.expandedCategoryIds, id];
+                }
+                this.rebuildCategoryRows();
             },
             parentCategoryName(parentId) {
                 if (!Number(parentId)) {
                     return '一级分类';
                 }
-                const parent = this.categories.find((item) => Number(item.id) === Number(parentId));
+                const parent = this.allCategories.find((item) => Number(item.id) === Number(parentId));
                 return parent ? parent.name : '未找到';
             },
             categoryParentOptions() {
-                return this.categories.filter((item) => Number(item.id) !== Number(this.categoryForm.id || 0));
+                return this.allCategories.filter((item) => Number(item.id) !== Number(this.categoryForm.id || 0));
             },
             syncCategoryLevel() {
-                const parent = this.categories.find((item) => Number(item.id) === Number(this.categoryForm.parent_id || 0));
+                const parent = this.allCategories.find((item) => Number(item.id) === Number(this.categoryForm.parent_id || 0));
                 this.categoryForm.level = parent ? Number(parent.level || 0) + 1 : 1;
             },
             openCategoryModal(item = null) {
@@ -1305,30 +1562,49 @@
                     const payload = await apiRequest(`/mall/api/admin/users?${query}`);
                     this.users = payload.items || [];
                     this.userPager = normalizePagerMeta(payload.meta, this.userPager.page_size);
-                    if (!this.memberOptions.length) {
-                        await this.loadMemberOptions();
-                    }
                 } catch (error) {
                     notice(error.message, 'error');
                 }
             },
-            async loadMemberOptions() {
+            async loadMemberOptions(keyword = '') {
                 try {
-                    const bucket = [];
-                    let page = 1;
-                    let totalPages = 1;
-
-                    do {
-                        const payload = await apiRequest(`/mall/api/admin/members?page=${page}&page_size=100`);
-                        bucket.push(...(payload.items || []));
-                        totalPages = Number(payload.meta?.total_pages || 1);
-                        page += 1;
-                    } while (page <= totalPages);
-
-                    this.memberOptions = bucket;
+                    const query = new URLSearchParams({
+                        keyword: keyword || '',
+                        page: 1,
+                        page_size: 20,
+                    }).toString();
+                    const payload = await apiRequest(`/mall/api/admin/members?${query}`);
+                    this.memberOptions = payload.items || [];
                 } catch (error) {
                     notice(error.message, 'error');
                 }
+            },
+            scheduleMemberSearch() {
+                window.clearTimeout(this.memberSearchTimer);
+                this.memberSearchTimer = window.setTimeout(() => {
+                    void this.loadMemberOptions(this.userMemberKeyword.trim());
+                }, 260);
+            },
+            async prefillUserMemberSearch(memberId) {
+                if (!memberId) {
+                    this.userMemberKeyword = '';
+                    this.memberOptions = [];
+                    return;
+                }
+
+                await this.loadMemberOptions(String(memberId));
+                const selected = this.memberOptions.find((item) => Number(item.fid) === Number(memberId));
+                this.userMemberKeyword = selected ? `${selected.fname}（${selected.fnumber}）` : `已绑定会员 #${memberId}`;
+            },
+            selectUserMember(item) {
+                this.userForm.membership_member_id = String(item.fid);
+                this.userMemberKeyword = `${item.fname}（${item.fnumber}）`;
+                this.memberOptions = [item];
+            },
+            clearUserMemberBinding() {
+                this.userForm.membership_member_id = '';
+                this.userMemberKeyword = '';
+                this.memberOptions = [];
             },
             openUserModal(item = null) {
                 this.userForm = item
@@ -1344,13 +1620,17 @@
                     }
                     : defaultUserForm();
                 this.modals.user = true;
-                if (!this.memberOptions.length) {
-                    void this.loadMemberOptions();
+                this.userMemberKeyword = '';
+                this.memberOptions = [];
+                if (item?.membership_member_id) {
+                    void this.prefillUserMemberSearch(item.membership_member_id);
                 }
             },
             closeUserModal() {
                 this.modals.user = false;
                 this.userForm = defaultUserForm();
+                this.userMemberKeyword = '';
+                this.memberOptions = [];
             },
             async saveUser() {
                 const url = this.userForm.id ? `/mall/api/admin/users/${this.userForm.id}` : '/mall/api/admin/users';
@@ -1445,9 +1725,6 @@
                     if (!this.memberClasses.length) {
                         this.memberClasses = await apiRequest('/mall/api/admin/member-classes');
                     }
-                    if (!this.memberOptions.length) {
-                        await this.loadMemberOptions();
-                    }
                 } catch (error) {
                     notice(error.message, 'error');
                 }
@@ -1492,7 +1769,6 @@
                     notice('会员已保存。');
                     this.closeMemberModal();
                     await this.loadMembers();
-                    await this.loadMemberOptions();
                 } catch (error) {
                     notice(error.message, 'error');
                 }

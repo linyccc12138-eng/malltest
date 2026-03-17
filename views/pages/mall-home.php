@@ -20,16 +20,26 @@
         </div>
     </div>
 
-    <section id="catalog" class="grid gap-6 lg:grid-cols-[280px_1fr]">
-        <aside class="space-y-4 rounded-[1.8rem] border border-bronze/15 bg-white/80 p-5 shadow-card">
+    <section id="catalog" class="space-y-4 lg:grid lg:grid-cols-[280px_1fr] lg:gap-6 lg:space-y-0">
+        <div class="flex items-center justify-between rounded-[1.5rem] border border-bronze/12 bg-white/80 px-4 py-3 shadow-card lg:hidden">
             <div>
                 <div class="text-sm uppercase tracking-[0.3em] text-bronze/70">商品筛选</div>
-                <h2 class="mt-2 font-display text-2xl text-ink">按关键词、品牌与价格快速筛选</h2>
+                <div class="text-sm text-ink/60">按关键词、品牌和分类快速筛选</div>
+            </div>
+            <button @click="mobileFiltersOpen = !mobileFiltersOpen" type="button" class="rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">
+                <span x-text="mobileFiltersOpen ? '收起' : '展开'"></span>
+            </button>
+        </div>
+
+        <aside x-show="mobileFiltersOpen || window.innerWidth >= 1024" x-transition.opacity.duration.180ms class="space-y-4 rounded-[1.8rem] border border-bronze/15 bg-white/80 p-5 shadow-card" x-cloak>
+            <div>
+                <div class="text-sm uppercase tracking-[0.3em] text-bronze/70">商品筛选</div>
+                <h2 class="mt-2 font-display text-2xl text-ink">按关键词、品牌与分类快速筛选</h2>
             </div>
 
             <label class="block text-sm text-ink/70">
                 关键词
-                <input x-model="filters.keyword" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/50" placeholder="输入商品名或副标题">
+                <input x-model="filters.keyword" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/50" placeholder="输入商品名或简介">
             </label>
 
             <label class="block text-sm text-ink/70">
@@ -38,6 +48,16 @@
                     <option value="">全部品牌</option>
                     <template x-for="brand in filterOptions.brands" :key="brand">
                         <option :value="brand" x-text="brand"></option>
+                    </template>
+                </select>
+            </label>
+
+            <label class="block text-sm text-ink/70">
+                分类
+                <select x-model="filters.category_id" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/50">
+                    <option value="">全部分类</option>
+                    <template x-for="item in categoryOptions" :key="item.id">
+                        <option :value="String(item.id)" x-text="categoryLabel(item)"></option>
                     </template>
                 </select>
             </label>
@@ -52,27 +72,11 @@
                 </select>
             </label>
 
-            <div class="grid grid-cols-2 gap-3">
-                <label class="block text-sm text-ink/70">
-                    最低价
-                    <input x-model="filters.price_min" type="number" min="0" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/50">
-                </label>
-                <label class="block text-sm text-ink/70">
-                    最高价
-                    <input x-model="filters.price_max" type="number" min="0" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/50">
-                </label>
-            </div>
-
-            <div class="space-y-2">
-                <div class="rounded-[1.2rem] border border-bronze/10 bg-parchment/45 px-4 py-3 text-xs leading-6 text-ink/55">
-                    输入或切换条件后会自动筛选商品。
-                </div>
-                <button @click="resetFilters" type="button" class="w-full rounded-full border border-bronze/15 px-4 py-3 text-sm text-bronze transition hover:border-bronze hover:bg-bronze/5">重置条件</button>
-            </div>
+            <button @click="resetFilters" type="button" class="w-full rounded-full border border-bronze/15 px-4 py-3 text-sm text-bronze transition hover:border-bronze hover:bg-bronze/5">重置条件</button>
         </aside>
 
         <div class="space-y-6">
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-between gap-3">
                 <div>
                     <div class="text-sm uppercase tracking-[0.3em] text-bronze/70">商品列表</div>
                     <h2 class="font-display text-3xl text-ink">兼顾移动端与桌面端的商城浏览体验</h2>
@@ -80,25 +84,28 @@
                 <button x-show="products.meta.has_more" @click="loadMore" class="rounded-full border border-bronze/20 px-4 py-2 text-sm text-bronze transition hover:border-bronze hover:bg-bronze/5">加载更多</button>
             </div>
 
-            <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div class="grid grid-cols-2 gap-3 lg:gap-4 xl:grid-cols-3">
                 <template x-for="item in products.data" :key="item.id">
-                    <article class="group rounded-[1.6rem] border border-bronze/12 bg-white/85 p-4 shadow-card transition duration-300 hover:-translate-y-1 hover:shadow-glow">
-                        <a :href="'/mall/products/' + item.id" class="block overflow-hidden rounded-[1.4rem] bg-parchment/70">
-                            <div class="product-cover h-52 bg-cover bg-center transition duration-500 group-hover:scale-[1.04]" :style="`background-image:url(${item.cover_image})`"></div>
+                    <article class="group rounded-[1.35rem] border border-bronze/12 bg-white/85 p-3 shadow-card transition duration-300 hover:-translate-y-1 hover:shadow-glow sm:p-4">
+                        <a :href="'/mall/products/' + item.id" class="block overflow-hidden rounded-[1.2rem] bg-parchment/70">
+                            <div class="product-cover aspect-[4/5] bg-cover bg-center transition duration-500 group-hover:scale-[1.04]" :style="`background-image:url(${item.cover_image})`"></div>
                         </a>
-                        <div class="mt-4 flex items-start justify-between gap-3">
+                        <div class="mt-3 flex items-start justify-between gap-2">
                             <div class="min-w-0">
                                 <h3 class="truncate font-semibold text-ink" x-text="item.name"></h3>
-                                <p class="mt-1 line-clamp-2 text-sm text-ink/60" x-text="item.summary"></p>
+                                <p class="mt-1 line-clamp-2 text-xs text-ink/60 sm:text-sm" x-text="item.summary"></p>
                             </div>
-                            <span class="rounded-full bg-sage/10 px-3 py-1 text-xs text-sage" x-text="item.brand || '无品牌'"></span>
+                            <span class="rounded-full bg-sage/10 px-2.5 py-1 text-[11px] text-sage" x-text="item.brand || '无品牌'"></span>
                         </div>
-                        <div class="mt-4 flex items-center justify-between">
+                        <div class="mt-3 flex items-end justify-between gap-2">
                             <div>
-                                <div class="text-lg font-semibold text-bronze">￥<span x-text="formatMoney(item.price)"></span></div>
-                                <div class="text-xs text-ink/45">评分 <span x-text="item.rating"></span> / 库存 <span x-text="item.stock_total"></span></div>
+                                <div class="text-base font-semibold text-bronze sm:text-lg">￥<span x-text="formatMoney(item.price)"></span></div>
+                                <div class="text-[11px] text-ink/45 sm:text-xs">评分 <span x-text="item.rating"></span> / 库存 <span x-text="item.stock_total"></span></div>
                             </div>
-                            <button @click="openQuickView(item.id)" class="rounded-full border border-bronze/20 px-4 py-2 text-sm text-bronze transition hover:border-bronze hover:bg-bronze/5">Quick View</button>
+                        </div>
+                        <div class="mt-3 flex gap-2">
+                            <button @click="openQuickView(item.id)" type="button" class="flex-1 rounded-full bg-bronze px-3 py-2 text-xs text-white shadow-card transition hover:bg-bronze/90 sm:text-sm">加入购物车</button>
+                            <a :href="'/mall/products/' + item.id" class="rounded-full border border-bronze/20 px-3 py-2 text-xs text-bronze transition hover:border-bronze hover:bg-bronze/5 sm:text-sm">详情</a>
                         </div>
                     </article>
                 </template>
@@ -106,19 +113,46 @@
         </div>
     </section>
 
-    <section class="grid gap-6 lg:grid-cols-2">
+    <section class="grid gap-6 lg:grid-cols-3">
         <div class="rounded-[1.8rem] border border-sage/15 bg-white/80 p-5 shadow-card">
             <div class="flex items-center justify-between">
                 <h2 class="font-display text-2xl text-sage">商品上新</h2>
                 <span class="text-xs uppercase tracking-[0.3em] text-sage/70">New</span>
             </div>
-            <div class="mt-4 grid gap-4 sm:grid-cols-2">
+            <div class="mt-4 space-y-4">
                 <?php foreach (($homeData['new_arrivals'] ?? []) as $item): ?>
-                    <a href="/mall/products/<?= (int) $item['id'] ?>" class="rounded-[1.4rem] border border-sage/10 bg-sage/5 p-4 transition hover:bg-sage/10">
-                        <div class="text-sm text-sage/70">新品推荐</div>
-                        <div class="mt-2 font-medium text-ink"><?= htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8') ?></div>
-                        <div class="mt-1 text-sm text-ink/55"><?= htmlspecialchars($item['summary'], ENT_QUOTES, 'UTF-8') ?></div>
+                    <a href="/mall/products/<?= (int) $item['id'] ?>" class="flex items-center gap-3 rounded-[1.4rem] border border-sage/10 bg-sage/5 p-4 transition hover:bg-sage/10">
+                        <div class="h-20 w-20 rounded-[1.2rem] bg-cover bg-center" style="background-image:url('<?= htmlspecialchars($item['cover_image'], ENT_QUOTES, 'UTF-8') ?>')"></div>
+                        <div class="min-w-0">
+                            <div class="text-sm text-sage/70">新品推荐</div>
+                            <div class="mt-1 font-medium text-ink"><?= htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="mt-1 line-clamp-2 text-sm text-ink/55"><?= htmlspecialchars($item['summary'], ENT_QUOTES, 'UTF-8') ?></div>
+                        </div>
                     </a>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <div class="rounded-[1.8rem] border border-bronze/15 bg-white/80 p-5 shadow-card">
+            <div class="flex items-center justify-between">
+                <h2 class="font-display text-2xl text-bronze">热门活动</h2>
+                <span class="text-xs uppercase tracking-[0.3em] text-bronze/70">Hot</span>
+            </div>
+            <div class="mt-4 space-y-4">
+                <?php foreach (($homeData['hot_activities'] ?? []) as $activity): ?>
+                    <article class="flex items-center gap-3 rounded-[1.4rem] border border-bronze/10 bg-parchment/65 p-4">
+                        <div class="h-20 w-20 overflow-hidden rounded-[1.2rem] border border-bronze/10 bg-white">
+                            <?php if (!empty($activity['thumbnail_image'])): ?>
+                                <img src="<?= htmlspecialchars($activity['thumbnail_image'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8') ?>" class="h-full w-full object-cover">
+                            <?php else: ?>
+                                <div class="flex h-full w-full items-center justify-center text-xs text-ink/40">暂无缩略图</div>
+                            <?php endif; ?>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="font-medium text-ink"><?= htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8') ?></div>
+                            <p class="mt-1 line-clamp-2 text-sm leading-6 text-ink/60"><?= htmlspecialchars($activity['summary'], ENT_QUOTES, 'UTF-8') ?></p>
+                        </div>
+                    </article>
                 <?php endforeach; ?>
             </div>
         </div>
@@ -128,12 +162,15 @@
                 <h2 class="font-display text-2xl text-teal">推荐课程</h2>
                 <span class="text-xs uppercase tracking-[0.3em] text-teal/70">Course</span>
             </div>
-            <div class="mt-4 grid gap-4 sm:grid-cols-2">
+            <div class="mt-4 space-y-4">
                 <?php foreach (($homeData['recommended_courses'] ?? []) as $item): ?>
-                    <a href="/mall/products/<?= (int) $item['id'] ?>" class="rounded-[1.4rem] border border-teal/10 bg-teal/5 p-4 transition hover:bg-teal/10">
-                        <div class="text-sm text-teal/70">课程型商品</div>
-                        <div class="mt-2 font-medium text-ink"><?= htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8') ?></div>
-                        <div class="mt-1 text-sm text-ink/55"><?= htmlspecialchars($item['summary'], ENT_QUOTES, 'UTF-8') ?></div>
+                    <a href="/mall/products/<?= (int) $item['id'] ?>" class="flex items-center gap-3 rounded-[1.4rem] border border-teal/10 bg-teal/5 p-4 transition hover:bg-teal/10">
+                        <div class="h-20 w-20 rounded-[1.2rem] bg-cover bg-center" style="background-image:url('<?= htmlspecialchars($item['cover_image'], ENT_QUOTES, 'UTF-8') ?>')"></div>
+                        <div class="min-w-0">
+                            <div class="text-sm text-teal/70">课程型商品</div>
+                            <div class="mt-1 font-medium text-ink"><?= htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="mt-1 line-clamp-2 text-sm text-ink/55"><?= htmlspecialchars($item['summary'], ENT_QUOTES, 'UTF-8') ?></div>
+                        </div>
                     </a>
                 <?php endforeach; ?>
             </div>
@@ -142,22 +179,59 @@
 
     <template x-teleport="body">
         <div x-show="quickView.open" x-cloak x-transition.opacity.duration.180ms class="modal-overlay" @click.self="quickView.open = false">
-            <div x-transition.scale.opacity.duration.220ms class="modal-panel w-full max-w-2xl overflow-y-auto rounded-[2rem] border border-bronze/10 bg-white/95 p-6 shadow-glow">
+            <div x-transition.scale.opacity.duration.220ms class="modal-panel w-full max-w-3xl overflow-y-auto rounded-[2rem] border border-bronze/10 bg-white/95 p-5 shadow-glow sm:p-6">
                 <div class="flex items-start justify-between gap-4">
                     <div>
-                        <div class="text-sm uppercase tracking-[0.3em] text-bronze/65">Quick View</div>
+                        <div class="text-sm uppercase tracking-[0.3em] text-bronze/65">加入购物车</div>
                         <h3 class="mt-2 font-display text-3xl text-ink" x-text="quickView.data?.name || ''"></h3>
+                        <p class="mt-2 text-sm leading-7 text-ink/60" x-text="quickView.data?.summary || quickView.data?.quick_view_text || ''"></p>
                     </div>
-                    <button @click="quickView.open = false" class="rounded-full border border-bronze/20 px-3 py-2 text-sm text-bronze">关闭</button>
+                    <button @click="quickView.open = false" type="button" class="rounded-full border border-bronze/20 px-3 py-2 text-sm text-bronze">关闭</button>
                 </div>
-                <p class="mt-4 text-sm leading-7 text-ink/65" x-text="quickView.data?.quick_view_text || ''"></p>
-                <div class="mt-6 grid gap-4 sm:grid-cols-2">
-                    <template x-for="sku in quickView.data?.skus || []" :key="sku.id">
-                        <div class="rounded-[1.3rem] border border-bronze/10 bg-parchment/55 p-4">
-                            <div class="font-medium text-ink" x-text="Object.values(sku.attributes || {}).join(' / ') || sku.sku_code"></div>
-                            <div class="mt-2 text-sm text-ink/60">价格 ￥<span x-text="formatMoney(sku.price)"></span> / 库存 <span x-text="sku.stock"></span></div>
+
+                <div class="mt-6 grid gap-5 md:grid-cols-[220px_1fr]">
+                    <div class="overflow-hidden rounded-[1.6rem] bg-parchment/60">
+                        <div class="aspect-[4/5] bg-cover bg-center" :style="`background-image:url(${quickView.currentSku?.cover_image || quickView.data?.cover_image || ''})`"></div>
+                    </div>
+                    <div class="space-y-5">
+                        <template x-for="(options, name) in quickView.skuOptions" :key="name">
+                            <div>
+                                <div class="mb-2 text-sm font-medium text-ink" x-text="name"></div>
+                                <div class="flex flex-wrap gap-2">
+                                    <template x-for="option in options" :key="option">
+                                        <button
+                                            @click="selectQuickViewOption(name, option)"
+                                            :class="quickView.selectedOptions[name] === option ? 'border-bronze bg-bronze text-white' : 'border-bronze/20 bg-parchment/55 text-ink'"
+                                            class="rounded-full border px-4 py-2 text-sm transition"
+                                            x-text="option"
+                                        ></button>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <div class="rounded-[1.3rem] border border-bronze/10 bg-parchment/55 p-4">
+                                <div class="text-sm text-ink/55">当前价格</div>
+                                <div class="mt-2 text-2xl font-semibold text-bronze">￥<span x-text="formatMoney(quickViewPrice())"></span></div>
+                            </div>
+                            <div class="rounded-[1.3rem] border border-bronze/10 bg-parchment/55 p-4">
+                                <div class="text-sm text-ink/55">当前库存</div>
+                                <div class="mt-2 text-2xl font-semibold text-ink" x-text="quickViewStock()"></div>
+                            </div>
                         </div>
-                    </template>
+
+                        <div class="flex items-center gap-3">
+                            <button @click="quickView.quantity = Math.max(1, Number(quickView.quantity) - 1)" type="button" class="h-11 w-11 rounded-full border border-bronze/20">-</button>
+                            <input x-model="quickView.quantity" type="number" min="1" class="w-24 rounded-full border-bronze/20 text-center">
+                            <button @click="quickView.quantity = Number(quickView.quantity) + 1" type="button" class="h-11 w-11 rounded-full border border-bronze/20">+</button>
+                        </div>
+
+                        <div class="flex flex-wrap gap-3">
+                            <button @click="addQuickViewToCart" type="button" class="rounded-full bg-bronze px-6 py-3 text-sm text-white shadow-card transition hover:bg-bronze/90">确认加入购物车</button>
+                            <a :href="quickView.data ? '/mall/products/' + quickView.data.id : '/mall'" class="rounded-full border border-bronze/20 px-6 py-3 text-sm text-bronze transition hover:border-bronze hover:bg-bronze/5">查看详情</a>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

@@ -56,22 +56,33 @@ class MembershipService
             ];
         }
 
+        $searchSql = 'fnumber LIKE :keyword OR fname LIKE :keyword';
+        $params = [':keyword' => '%' . $keyword . '%'];
+
+        if (ctype_digit($keyword)) {
+            $searchSql = 'fid = :fid OR ' . $searchSql;
+            $params[':fid'] = (int) $keyword;
+        }
+
         $countStmt = $pdo->prepare(
             'SELECT COUNT(*) AS total
              FROM member
-             WHERE fnumber LIKE :keyword OR fname LIKE :keyword'
+             WHERE ' . $searchSql
         );
-        $countStmt->execute([':keyword' => '%' . $keyword . '%']);
+        $countStmt->execute($params);
         $total = (int) (($countStmt->fetch()['total'] ?? 0));
 
         $stmt = $pdo->prepare(
             'SELECT fid, fnumber, fname, fclassesid, fclassesname, faccruedamount, fbalance, fmark
              FROM member
-             WHERE fnumber LIKE :keyword OR fname LIKE :keyword
+             WHERE ' . $searchSql . '
              ORDER BY fid DESC
              LIMIT :limit OFFSET :offset'
         );
         $stmt->bindValue(':keyword', '%' . $keyword . '%');
+        if (ctype_digit($keyword)) {
+            $stmt->bindValue(':fid', (int) $keyword, PDO::PARAM_INT);
+        }
         $stmt->bindValue(':limit', $pageSize, PDO::PARAM_INT);
         $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
         $stmt->execute();

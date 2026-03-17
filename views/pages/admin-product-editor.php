@@ -101,26 +101,93 @@ $editorData = [
                 </div>
             </div>
 
-            <div class="rounded-[1.8rem] border border-teal/10 bg-white/85 p-5 shadow-card">
-                <h2 class="font-display text-2xl text-ink">封面图</h2>
-                <p class="mt-2 text-sm leading-7 text-ink/60">上传后将直接用于商品列表、详情页首图和快捷预览。</p>
+            <div class="space-y-6">
+                <div class="rounded-[1.8rem] border border-teal/10 bg-white/85 p-5 shadow-card">
+                    <h2 class="font-display text-2xl text-ink">封面图</h2>
+                    <p class="mt-2 text-sm leading-7 text-ink/60">上传后将直接用于商品列表、详情页首图和快捷预览。</p>
 
-                <div class="mt-5 overflow-hidden rounded-[1.6rem] border border-bronze/10 bg-parchment/50">
-                    <template x-if="productForm.cover_image">
-                        <img :src="productForm.cover_image" alt="商品封面" class="h-64 w-full object-cover">
-                    </template>
-                    <template x-if="!productForm.cover_image">
-                        <div class="flex h-64 items-center justify-center text-sm text-ink/45">暂未上传封面图</div>
-                    </template>
+                    <div class="mt-5 overflow-hidden rounded-[1.6rem] border border-bronze/10 bg-parchment/50">
+                        <template x-if="productForm.cover_image">
+                            <img :src="productForm.cover_image" alt="商品封面" class="h-64 w-full object-cover">
+                        </template>
+                        <template x-if="!productForm.cover_image">
+                            <div class="flex h-64 items-center justify-center text-sm text-ink/45">暂未上传封面图</div>
+                        </template>
+                    </div>
+
+                    <div class="mt-4 space-y-3">
+                        <label class="inline-flex cursor-pointer rounded-full bg-teal px-4 py-2 text-sm text-white shadow-card transition hover:bg-teal/90">
+                            <input type="file" accept="image/*" class="hidden" @change="uploadCoverImage($event)">
+                            <span x-text="uploading.cover ? '上传中...' : '上传封面图'"></span>
+                        </label>
+                        <p class="text-xs break-all text-ink/45" x-text="productForm.cover_image || '上传后的图片地址会显示在这里'"></p>
+                    </div>
                 </div>
 
-                <div class="mt-4 space-y-3">
-                    <label class="inline-flex cursor-pointer rounded-full bg-teal px-4 py-2 text-sm text-white shadow-card transition hover:bg-teal/90">
-                        <input type="file" accept="image/*" class="hidden" @change="uploadCoverImage($event)">
-                        <span x-text="uploading.cover ? '上传中...' : '上传封面图'"></span>
-                    </label>
-                    <p class="text-xs break-all text-ink/45" x-text="productForm.cover_image || '上传后的图片地址会显示在这里'"></p>
+                <div class="rounded-[1.8rem] border border-teal/10 bg-white/85 p-5 shadow-card">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <h2 class="font-display text-2xl text-ink">商品相册</h2>
+                            <p class="mt-2 text-sm leading-7 text-ink/60">除封面图外，最多再上传 10 张商品图片，详情页将按顺序展示。</p>
+                        </div>
+                        <div class="rounded-full bg-bronze/10 px-3 py-1 text-xs text-bronze">
+                            <span x-text="`${productForm.gallery_images.length}/10`"></span>
+                        </div>
+                    </div>
+
+                    <div class="mt-5 grid grid-cols-2 gap-3">
+                        <template x-for="(image, index) in productForm.gallery_images" :key="`${image}-${index}`">
+                            <div class="relative overflow-hidden rounded-[1.4rem] border border-bronze/10 bg-parchment/55">
+                                <img :src="image" alt="商品附加图片" class="h-32 w-full object-cover">
+                                <button @click="removeGalleryImage(index)" type="button" class="absolute right-2 top-2 rounded-full bg-white/90 px-2.5 py-1 text-xs text-rose shadow-card">删除</button>
+                            </div>
+                        </template>
+                        <template x-if="!productForm.gallery_images.length">
+                            <div class="col-span-2 flex h-32 items-center justify-center rounded-[1.4rem] border border-dashed border-bronze/15 bg-parchment/40 text-sm text-ink/45">暂未上传附加图片</div>
+                        </template>
+                    </div>
+
+                    <div class="mt-4 space-y-3">
+                        <label class="inline-flex cursor-pointer rounded-full border border-bronze/20 px-4 py-2 text-sm text-bronze transition hover:border-bronze hover:bg-bronze/5">
+                            <input type="file" accept="image/*" multiple class="hidden" @change="uploadGalleryImages($event)">
+                            <span x-text="uploading.gallery ? '上传中...' : '上传附加图片'"></span>
+                        </label>
+                    </div>
                 </div>
+            </div>
+        </section>
+
+        <section class="rounded-[1.8rem] border border-bronze/10 bg-white/85 p-5 shadow-card">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h2 class="font-display text-2xl text-ink">规格设置</h2>
+                    <p class="mt-2 text-sm leading-7 text-ink/60">可为商品配置多个规格，前台下单时会按所选规格价格和库存计算。</p>
+                </div>
+                <button @click="addSkuRow()" type="button" class="rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">新增规格</button>
+            </div>
+
+            <div class="mt-5 space-y-4">
+                <template x-for="(sku, index) in productForm.skus" :key="`sku-${index}`">
+                    <div class="rounded-[1.5rem] border border-bronze/10 bg-parchment/45 p-4">
+                        <div class="grid gap-4 md:grid-cols-[1.2fr_0.8fr_0.8fr_auto]">
+                            <label class="block text-sm text-ink/70">
+                                规格名称
+                                <input x-model="sku.label" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-white/80" placeholder="例如：220g / 标准版 / 雾茶绿">
+                            </label>
+                            <label class="block text-sm text-ink/70">
+                                规格价格
+                                <input x-model="sku.price" type="number" min="0" step="0.01" class="mt-2 w-full rounded-2xl border-bronze/15 bg-white/80">
+                            </label>
+                            <label class="block text-sm text-ink/70">
+                                规格库存
+                                <input x-model="sku.stock" type="number" min="0" class="mt-2 w-full rounded-2xl border-bronze/15 bg-white/80">
+                            </label>
+                            <div class="flex items-end">
+                                <button @click="removeSkuRow(index)" type="button" class="rounded-full border border-rose/20 px-4 py-2 text-sm text-rose">删除</button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
             </div>
         </section>
 

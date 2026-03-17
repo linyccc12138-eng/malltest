@@ -60,7 +60,6 @@
         <div class="flex items-center justify-between">
             <div>
                 <div class="text-sm uppercase tracking-[0.3em] text-bronze/70">商品详情</div>
-                <h2 class="mt-2 font-display text-3xl text-ink">多图轮播、SKU 联动与详情富文本展示</h2>
             </div>
         </div>
         <article class="prose prose-stone mt-6 max-w-none" x-html="product.detail_html"></article>
