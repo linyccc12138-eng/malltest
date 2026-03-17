@@ -156,24 +156,26 @@
         </div>
     </section>
 
-    <div x-show="quickView.open" x-cloak x-transition.opacity.duration.180ms class="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 px-4 py-6 backdrop-blur-[2px]" @click.self="quickView.open = false">
-        <div x-transition.scale.opacity.duration.220ms class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] border border-bronze/10 bg-white/95 p-6 shadow-glow">
-            <div class="flex items-start justify-between gap-4">
-                <div>
-                    <div class="text-sm uppercase tracking-[0.3em] text-bronze/65">Quick View</div>
-                    <h3 class="mt-2 font-display text-3xl text-ink" x-text="quickView.data?.name || ''"></h3>
-                </div>
-                <button @click="quickView.open = false" class="rounded-full border border-bronze/20 px-3 py-2 text-sm text-bronze">关闭</button>
-            </div>
-            <p class="mt-4 text-sm leading-7 text-ink/65" x-text="quickView.data?.quick_view_text || ''"></p>
-            <div class="mt-6 grid gap-4 sm:grid-cols-2">
-                <template x-for="sku in quickView.data?.skus || []" :key="sku.id">
-                    <div class="rounded-[1.3rem] border border-bronze/10 bg-parchment/55 p-4">
-                        <div class="font-medium text-ink" x-text="Object.values(sku.attributes || {}).join(' / ') || sku.sku_code"></div>
-                        <div class="mt-2 text-sm text-ink/60">价格 ￥<span x-text="formatMoney(sku.price)"></span> / 库存 <span x-text="sku.stock"></span></div>
+    <template x-teleport="body">
+        <div x-show="quickView.open" x-cloak x-transition.opacity.duration.180ms class="modal-overlay" @click.self="quickView.open = false">
+            <div x-transition.scale.opacity.duration.220ms class="modal-panel w-full max-w-2xl overflow-y-auto rounded-[2rem] border border-bronze/10 bg-white/95 p-6 shadow-glow">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <div class="text-sm uppercase tracking-[0.3em] text-bronze/65">Quick View</div>
+                        <h3 class="mt-2 font-display text-3xl text-ink" x-text="quickView.data?.name || ''"></h3>
                     </div>
-                </template>
+                    <button @click="quickView.open = false" class="rounded-full border border-bronze/20 px-3 py-2 text-sm text-bronze">关闭</button>
+                </div>
+                <p class="mt-4 text-sm leading-7 text-ink/65" x-text="quickView.data?.quick_view_text || ''"></p>
+                <div class="mt-6 grid gap-4 sm:grid-cols-2">
+                    <template x-for="sku in quickView.data?.skus || []" :key="sku.id">
+                        <div class="rounded-[1.3rem] border border-bronze/10 bg-parchment/55 p-4">
+                            <div class="font-medium text-ink" x-text="Object.values(sku.attributes || {}).join(' / ') || sku.sku_code"></div>
+                            <div class="mt-2 text-sm text-ink/60">价格 ￥<span x-text="formatMoney(sku.price)"></span> / 库存 <span x-text="sku.stock"></span></div>
+                        </div>
+                    </template>
+                </div>
             </div>
         </div>
-    </div>
+    </template>
 </section>

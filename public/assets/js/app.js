@@ -39,6 +39,12 @@
         window.setTimeout(() => item.remove(), 2800);
     };
 
+    const syncHeaderOffset = () => {
+        const header = document.querySelector('header');
+        const offset = header ? Math.ceil(header.getBoundingClientRect().height) + 16 : 80;
+        document.documentElement.style.setProperty('--mall-header-offset', `${offset}px`);
+    };
+
     const apiRequest = async (url, options = {}) => {
         const method = (options.method || 'GET').toUpperCase();
         const fetchOptions = {
@@ -227,10 +233,46 @@
     });
 
     const defaultCategoryForm = () => ({ id: null, name: '', parent_id: '0', level: 1 });
-    const defaultUserForm = () => ({ id: null, username: '', nickname: '', phone: '', password: '', membership_member_id: '', allow_duplicate_membership: false });
+    const defaultUserForm = () => ({ id: null, username: '', nickname: '', phone: '', password: '', membership_member_id: '', allow_duplicate_membership: false, status: 'active' });
     const defaultMemberForm = () => ({ id: null, fnumber: '', fname: '', fclassesid: '', fclassesname: '', initial_amount: 0, fbalance: 0, fmark: '', adjust_amount: '', adjust_mark: '' });
 
     window.MallUtils = { formatMoney, notice, apiRequest, loadScriptOnce };
+
+    const bindLogoutAction = () => {
+        document.querySelectorAll('[data-logout]').forEach((button) => {
+            if (button.dataset.bound === '1') {
+                return;
+            }
+
+            button.dataset.bound = '1';
+            button.addEventListener('click', async () => {
+                if (button.disabled) {
+                    return;
+                }
+
+                button.disabled = true;
+                try {
+                    await apiRequest('/mall/api/auth/logout', { method: 'POST', body: {} });
+                    window.location.href = '/mall';
+                } catch (error) {
+                    notice(error.message, 'error');
+                    button.disabled = false;
+                }
+            });
+        });
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            syncHeaderOffset();
+            bindLogoutAction();
+        }, { once: true });
+    } else {
+        syncHeaderOffset();
+        bindLogoutAction();
+    }
+
+    window.addEventListener('resize', syncHeaderOffset);
 
     document.addEventListener('alpine:init', () => {
         Alpine.data('loginPage', () => ({
@@ -1252,6 +1294,7 @@
                         password: '',
                         membership_member_id: item.membership_member_id ? String(item.membership_member_id) : '',
                         allow_duplicate_membership: false,
+                        status: item.status || 'active',
                     }
                     : defaultUserForm();
                 this.modals.user = true;
@@ -1269,13 +1312,13 @@
                 const payload = {
                     ...this.userForm,
                     role: 'customer',
-                    status: 'active',
+                    status: this.userForm.status || 'active',
                     membership_member_id: this.userForm.membership_member_id || '',
                 };
 
                 try {
                     await apiRequest(url, { method, body: payload });
-                    notice('用户已保存。');
+                    notice(this.userForm.id ? '用户已保存。' : '用户已保存，初始密码为手机号后 8 位。');
                     this.closeUserModal();
                     await this.loadUsers();
                 } catch (error) {
@@ -1304,6 +1347,43 @@
                         return;
                     }
 
+                    notice(error.message, 'error');
+                }
+            },
+            async toggleUserStatus(item) {
+                const nextStatus = item.status === 'active' ? 'disabled' : 'active';
+                const actionLabel = nextStatus === 'active' ? '启用' : '禁用';
+                if (!window.confirm(`确认要${actionLabel}用户“${item.nickname || item.username}”吗？`)) {
+                    return;
+                }
+
+                try {
+                    await apiRequest(`/mall/api/admin/users/${item.id}/status`, {
+                        method: 'POST',
+                        body: { status: nextStatus },
+                    });
+                    notice(`用户已${actionLabel}。`);
+                    await this.loadUsers();
+
+                    if (Number(item.id) === Number(bootstrap.currentUser?.id || 0) && nextStatus !== 'active') {
+                        window.location.href = '/mall/login';
+                    }
+                } catch (error) {
+                    notice(error.message, 'error');
+                }
+            },
+            async resetUserPassword(item) {
+                if (!window.confirm(`确认将“${item.nickname || item.username}”的密码重置为手机号后 8 位吗？`)) {
+                    return;
+                }
+
+                try {
+                    await apiRequest(`/mall/api/admin/users/${item.id}/reset-password`, {
+                        method: 'POST',
+                        body: {},
+                    });
+                    notice('密码已重置为手机号后 8 位。');
+                } catch (error) {
                     notice(error.message, 'error');
                 }
             },

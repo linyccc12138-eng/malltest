@@ -125,6 +125,27 @@ class AdminApiController extends BaseController
         });
     }
 
+    public function updateUserStatus(Request $request, array $params = []): Response
+    {
+        return $this->adminRespond(function () use ($request, $params): array {
+            $this->validateCsrf($request);
+            return $this->users->updateUserStatus(
+                (int) ($params['id'] ?? 0),
+                (string) $request->input('status', 'active')
+            );
+        });
+    }
+
+    public function resetUserPassword(Request $request, array $params = []): Response
+    {
+        return $this->adminRespond(function () use ($request, $params): array {
+            $this->validateCsrf($request);
+            $this->users->resetPasswordToDefault((int) ($params['id'] ?? 0));
+
+            return ['message' => '密码已重置为手机号后 8 位。'];
+        });
+    }
+
     public function members(Request $request, array $params = []): Response
     {
         return $this->adminRespond(fn (): array => $this->membership->searchMembers(

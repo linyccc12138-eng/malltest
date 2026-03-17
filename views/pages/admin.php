@@ -212,7 +212,7 @@
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h2 class="font-display text-2xl text-ink">用户管理</h2>
-                    <p class="mt-2 text-sm text-ink/60">新增和编辑用户都通过模态框完成，手机号会校验唯一，重复绑定会员会要求二次确认。</p>
+                    <p class="mt-2 text-sm text-ink/60">新增用户初始密码默认使用手机号后 8 位，可直接禁用/启用账号，也支持一键重置默认密码。</p>
                 </div>
                 <button @click="openUserModal()" class="rounded-full bg-sage px-4 py-2 text-sm text-white">新增用户</button>
             </div>
@@ -234,7 +234,14 @@
                     <div class="rounded-[1.3rem] border border-bronze/10 bg-parchment/55 p-4">
                         <div class="flex items-start justify-between gap-3">
                             <div class="min-w-0">
-                                <div class="font-medium text-ink" x-text="item.nickname || item.username"></div>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <div class="font-medium text-ink" x-text="item.nickname || item.username"></div>
+                                    <span
+                                        :class="item.status === 'active' ? 'bg-sage/10 text-sage' : 'bg-rose/10 text-rose'"
+                                        class="rounded-full px-2.5 py-1 text-xs"
+                                        x-text="item.status === 'active' ? '正常' : '已禁用'"
+                                    ></span>
+                                </div>
                                 <div class="mt-1 text-sm text-ink/55">
                                     手机号 <span x-text="item.phone || '未填写'"></span>
                                     <span class="mx-1">/</span>
@@ -244,7 +251,16 @@
                                     会员 ID <span x-text="item.membership_member_id || '未绑定'"></span>
                                 </div>
                             </div>
-                            <button @click="openUserModal(item)" class="rounded-full border border-bronze/15 px-3 py-2 text-xs text-bronze">编辑</button>
+                            <div class="flex flex-wrap justify-end gap-2">
+                                <button @click="openUserModal(item)" class="rounded-full border border-bronze/15 px-3 py-2 text-xs text-bronze">编辑</button>
+                                <button @click="resetUserPassword(item)" class="rounded-full border border-teal/15 px-3 py-2 text-xs text-teal">重置密码</button>
+                                <button
+                                    @click="toggleUserStatus(item)"
+                                    :class="item.status === 'active' ? 'border-rose/20 text-rose' : 'border-sage/20 text-sage'"
+                                    class="rounded-full border px-3 py-2 text-xs"
+                                    x-text="item.status === 'active' ? '禁用' : '启用'"
+                                ></button>
+                            </div>
                         </div>
                     </div>
                 </template>
@@ -504,125 +520,134 @@
         </div>
     </div>
 
-    <div x-show="modals.category" x-cloak x-transition.opacity.duration.180ms class="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 px-4 py-6 backdrop-blur-[2px]" @click.self="closeCategoryModal()">
-        <div x-transition.scale.opacity.duration.220ms class="max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-[1.9rem] border border-bronze/10 bg-white/95 p-6 shadow-glow">
-            <div class="flex items-center justify-between gap-3">
-                <div>
-                    <h3 class="font-display text-2xl text-ink" x-text="categoryForm.id ? '编辑分类' : '新建分类'"></h3>
-                    <p class="mt-1 text-sm text-ink/55">父级分类直接从现有分类中选择，层级会自动同步更新。</p>
+    <template x-teleport="body">
+        <div x-show="modals.category" x-cloak x-transition.opacity.duration.180ms class="modal-overlay" @click.self="closeCategoryModal()">
+            <div x-transition.scale.opacity.duration.220ms class="modal-panel w-full max-w-xl overflow-y-auto rounded-[1.9rem] border border-bronze/10 bg-white/95 p-6 shadow-glow">
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <h3 class="font-display text-2xl text-ink" x-text="categoryForm.id ? '编辑分类' : '新建分类'"></h3>
+                        <p class="mt-1 text-sm text-ink/55">父级分类直接从现有分类中选择，层级会自动同步更新。</p>
+                    </div>
+                    <button @click="closeCategoryModal()" type="button" class="rounded-full border border-bronze/15 px-3 py-2 text-sm text-bronze">关闭</button>
                 </div>
-                <button @click="closeCategoryModal()" type="button" class="rounded-full border border-bronze/15 px-3 py-2 text-sm text-bronze">关闭</button>
-            </div>
-            <form @submit.prevent="saveCategory" class="mt-5 space-y-4">
-                <label class="block text-sm text-ink/70">
-                    分类名称
-                    <input x-model="categoryForm.name" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" required>
-                </label>
-                <label class="block text-sm text-ink/70">
-                    父级分类
-                    <select x-model="categoryForm.parent_id" @change="syncCategoryLevel()" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55">
-                        <option value="0">作为一级分类</option>
-                        <template x-for="item in categoryParentOptions()" :key="`parent-${item.id}`">
-                            <option :value="String(item.id)" x-text="categoryLabel(item)"></option>
-                        </template>
-                    </select>
-                </label>
-                <label class="block text-sm text-ink/70">
-                    分类层级
-                    <input x-model="categoryForm.level" type="number" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" readonly>
-                </label>
-                <div class="flex justify-end gap-2">
-                    <button type="button" @click="closeCategoryModal()" class="rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">取消</button>
-                    <button type="submit" class="rounded-full bg-sage px-4 py-2 text-sm text-white">保存分类</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div x-show="modals.user" x-cloak x-transition.opacity.duration.180ms class="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 px-4 py-6 backdrop-blur-[2px]" @click.self="closeUserModal()">
-        <div x-transition.scale.opacity.duration.220ms class="max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-[1.9rem] border border-bronze/10 bg-white/95 p-6 shadow-glow">
-            <div class="flex items-center justify-between gap-3">
-                <div>
-                    <h3 class="font-display text-2xl text-ink" x-text="userForm.id ? '编辑用户' : '新增用户'"></h3>
-                    <p class="mt-1 text-sm text-ink/55">手机号不能重复。若所选会员已绑定其他用户，保存时会弹出确认提示。</p>
-                </div>
-                <button @click="closeUserModal()" type="button" class="rounded-full border border-bronze/15 px-3 py-2 text-sm text-bronze">关闭</button>
-            </div>
-            <form @submit.prevent="saveUser" class="mt-5 space-y-4">
-                <label class="block text-sm text-ink/70">
-                    用户名
-                    <input x-model="userForm.username" type="text" autocomplete="off" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" required>
-                </label>
-                <label class="block text-sm text-ink/70">
-                    昵称
-                    <input x-model="userForm.nickname" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55">
-                </label>
-                <label class="block text-sm text-ink/70">
-                    手机号
-                    <input x-model="userForm.phone" type="text" inputmode="numeric" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55">
-                </label>
-                <label class="block text-sm text-ink/70">
-                    密码
-                    <input x-model="userForm.password" type="password" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" :placeholder="userForm.id ? '不修改可留空' : '至少 8 位'" :required="!userForm.id">
-                </label>
-                <label class="block text-sm text-ink/70">
-                    绑定会员
-                    <select x-model="userForm.membership_member_id" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55">
-                        <option value="">不绑定会员</option>
-                        <template x-for="item in memberOptions" :key="`user-member-${item.fid}`">
-                            <option :value="String(item.fid)" x-text="`${item.fname}（${item.fnumber}）`"></option>
-                        </template>
-                    </select>
-                </label>
-                <div class="flex justify-end gap-2">
-                    <button type="button" @click="closeUserModal()" class="rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">取消</button>
-                    <button type="submit" class="rounded-full bg-sage px-4 py-2 text-sm text-white">保存用户</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div x-show="modals.member" x-cloak x-transition.opacity.duration.180ms class="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 px-4 py-6 backdrop-blur-[2px]" @click.self="closeMemberModal()">
-        <div x-transition.scale.opacity.duration.220ms class="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-[1.9rem] border border-bronze/10 bg-white/95 p-6 shadow-glow">
-            <div class="flex items-center justify-between gap-3">
-                <div>
-                    <h3 class="font-display text-2xl text-ink" x-text="memberForm.id ? '编辑会员' : '新增会员'"></h3>
-                    <p class="mt-1 text-sm text-ink/55">会员余额调整会同步写入会员系统明细和日志。</p>
-                </div>
-                <button @click="closeMemberModal()" type="button" class="rounded-full border border-bronze/15 px-3 py-2 text-sm text-bronze">关闭</button>
-            </div>
-            <form @submit.prevent="saveMember" class="mt-5 space-y-4">
-                <div class="grid gap-4 md:grid-cols-2">
-                    <label class="block text-sm text-ink/70">会员编号<input x-model="memberForm.fnumber" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" required></label>
-                    <label class="block text-sm text-ink/70">会员名称<input x-model="memberForm.fname" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" required></label>
+                <form @submit.prevent="saveCategory" class="mt-5 space-y-4">
                     <label class="block text-sm text-ink/70">
-                        会员等级
-                        <select x-model="memberForm.fclassesid" @change="fillMemberClassName" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55">
-                            <option value="">请选择会员等级</option>
-                            <template x-for="cls in memberClasses" :key="cls.fid">
-                                <option :value="String(cls.fid)" x-text="cls.fname"></option>
+                        分类名称
+                        <input x-model="categoryForm.name" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" required>
+                    </label>
+                    <label class="block text-sm text-ink/70">
+                        父级分类
+                        <select x-model="categoryForm.parent_id" @change="syncCategoryLevel()" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55">
+                            <option value="0">作为一级分类</option>
+                            <template x-for="item in categoryParentOptions()" :key="`parent-${item.id}`">
+                                <option :value="String(item.id)" x-text="categoryLabel(item)"></option>
                             </template>
                         </select>
                     </label>
-                    <label class="block text-sm text-ink/70" x-show="!memberForm.id">初始余额<input x-model="memberForm.initial_amount" type="number" step="0.01" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
-                    <label class="block text-sm text-ink/70" x-show="memberForm.id">当前余额<input x-model="memberForm.fbalance" type="number" step="0.01" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
-                </div>
-                <label class="block text-sm text-ink/70">备注<textarea x-model="memberForm.fmark" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></textarea></label>
-
-                <div x-show="memberForm.id" class="rounded-[1.5rem] border border-bronze/10 bg-parchment/40 p-4">
-                    <div class="text-sm text-ink/60">支持直接调整会员余额，并同步写入会员系统消费明细和日志表。</div>
-                    <div class="mt-4 grid gap-4 md:grid-cols-2">
-                        <label class="block text-sm text-ink/70">调整金额<input x-model="memberForm.adjust_amount" type="number" step="0.01" class="mt-2 w-full rounded-2xl border-bronze/15 bg-white/80"></label>
-                        <label class="block text-sm text-ink/70">调整说明<input x-model="memberForm.adjust_mark" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-white/80"></label>
+                    <label class="block text-sm text-ink/70">
+                        分类层级
+                        <input x-model="categoryForm.level" type="number" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" readonly>
+                    </label>
+                    <div class="flex justify-end gap-2">
+                        <button type="button" @click="closeCategoryModal()" class="rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">取消</button>
+                        <button type="submit" class="rounded-full bg-sage px-4 py-2 text-sm text-white">保存分类</button>
                     </div>
-                    <button type="button" @click="adjustMemberBalance(memberForm.id)" class="mt-4 rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">调整余额</button>
-                </div>
-
-                <div class="flex justify-end gap-2">
-                    <button type="button" @click="closeMemberModal()" class="rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">取消</button>
-                    <button type="submit" class="rounded-full bg-sage px-4 py-2 text-sm text-white">保存会员</button>
-                </div>
-            </form>
+                </form>
+            </div>
         </div>
-    </div>
+    </template>
+
+    <template x-teleport="body">
+        <div x-show="modals.user" x-cloak x-transition.opacity.duration.180ms class="modal-overlay" @click.self="closeUserModal()">
+            <div x-transition.scale.opacity.duration.220ms class="modal-panel w-full max-w-xl overflow-y-auto rounded-[1.9rem] border border-bronze/10 bg-white/95 p-6 shadow-glow">
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <h3 class="font-display text-2xl text-ink" x-text="userForm.id ? '编辑用户' : '新增用户'"></h3>
+                        <p class="mt-1 text-sm text-ink/55">手机号不能重复。新增用户时，系统会自动将初始密码设置为手机号后 8 位。</p>
+                    </div>
+                    <button @click="closeUserModal()" type="button" class="rounded-full border border-bronze/15 px-3 py-2 text-sm text-bronze">关闭</button>
+                </div>
+                <form @submit.prevent="saveUser" class="mt-5 space-y-4">
+                    <label class="block text-sm text-ink/70">
+                        用户名
+                        <input x-model="userForm.username" type="text" autocomplete="off" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" required>
+                    </label>
+                    <label class="block text-sm text-ink/70">
+                        昵称
+                        <input x-model="userForm.nickname" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55">
+                    </label>
+                    <label class="block text-sm text-ink/70">
+                        手机号
+                        <input x-model="userForm.phone" type="text" inputmode="numeric" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" required>
+                    </label>
+                    <div x-show="!userForm.id" class="rounded-[1.3rem] border border-teal/15 bg-teal/5 px-4 py-3 text-sm text-teal">
+                        初始密码将自动设置为手机号后 8 位。
+                    </div>
+                    <label x-show="userForm.id" class="block text-sm text-ink/70">
+                        登录密码
+                        <input x-model="userForm.password" type="password" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" placeholder="留空则保持当前密码">
+                    </label>
+                    <label class="block text-sm text-ink/70">
+                        绑定会员
+                        <select x-model="userForm.membership_member_id" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55">
+                            <option value="">不绑定会员</option>
+                            <template x-for="item in memberOptions" :key="`user-member-${item.fid}`">
+                                <option :value="String(item.fid)" x-text="`${item.fname}（${item.fnumber}）`"></option>
+                            </template>
+                        </select>
+                    </label>
+                    <div class="flex justify-end gap-2">
+                        <button type="button" @click="closeUserModal()" class="rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">取消</button>
+                        <button type="submit" class="rounded-full bg-sage px-4 py-2 text-sm text-white">保存用户</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </template>
+
+    <template x-teleport="body">
+        <div x-show="modals.member" x-cloak x-transition.opacity.duration.180ms class="modal-overlay" @click.self="closeMemberModal()">
+            <div x-transition.scale.opacity.duration.220ms class="modal-panel w-full max-w-2xl overflow-y-auto rounded-[1.9rem] border border-bronze/10 bg-white/95 p-6 shadow-glow">
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <h3 class="font-display text-2xl text-ink" x-text="memberForm.id ? '编辑会员' : '新增会员'"></h3>
+                        <p class="mt-1 text-sm text-ink/55">会员余额调整会同步写入会员系统明细和日志。</p>
+                    </div>
+                    <button @click="closeMemberModal()" type="button" class="rounded-full border border-bronze/15 px-3 py-2 text-sm text-bronze">关闭</button>
+                </div>
+                <form @submit.prevent="saveMember" class="mt-5 space-y-4">
+                    <div class="grid gap-4 md:grid-cols-2">
+                        <label class="block text-sm text-ink/70">会员编号<input x-model="memberForm.fnumber" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" required></label>
+                        <label class="block text-sm text-ink/70">会员名称<input x-model="memberForm.fname" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" required></label>
+                        <label class="block text-sm text-ink/70">
+                            会员等级
+                            <select x-model="memberForm.fclassesid" @change="fillMemberClassName" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55">
+                                <option value="">请选择会员等级</option>
+                                <template x-for="cls in memberClasses" :key="cls.fid">
+                                    <option :value="String(cls.fid)" x-text="cls.fname"></option>
+                                </template>
+                            </select>
+                        </label>
+                        <label class="block text-sm text-ink/70" x-show="!memberForm.id">初始余额<input x-model="memberForm.initial_amount" type="number" step="0.01" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
+                        <label class="block text-sm text-ink/70" x-show="memberForm.id">当前余额<input x-model="memberForm.fbalance" type="number" step="0.01" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
+                    </div>
+                    <label class="block text-sm text-ink/70">备注<textarea x-model="memberForm.fmark" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></textarea></label>
+
+                    <div x-show="memberForm.id" class="rounded-[1.5rem] border border-bronze/10 bg-parchment/40 p-4">
+                        <div class="text-sm text-ink/60">支持直接调整会员余额，并同步写入会员系统消费明细和日志表。</div>
+                        <div class="mt-4 grid gap-4 md:grid-cols-2">
+                            <label class="block text-sm text-ink/70">调整金额<input x-model="memberForm.adjust_amount" type="number" step="0.01" class="mt-2 w-full rounded-2xl border-bronze/15 bg-white/80"></label>
+                            <label class="block text-sm text-ink/70">调整说明<input x-model="memberForm.adjust_mark" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-white/80"></label>
+                        </div>
+                        <button type="button" @click="adjustMemberBalance(memberForm.id)" class="mt-4 rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">调整余额</button>
+                    </div>
+
+                    <div class="flex justify-end gap-2">
+                        <button type="button" @click="closeMemberModal()" class="rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">取消</button>
+                        <button type="submit" class="rounded-full bg-sage px-4 py-2 text-sm text-white">保存会员</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </template>
 </section>

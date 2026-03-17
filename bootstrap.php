@@ -127,6 +127,8 @@ $router->put('/mall/api/admin/activities/{id}', [$adminApiController, 'saveActiv
 $router->get('/mall/api/admin/users', [$adminApiController, 'users']);
 $router->post('/mall/api/admin/users', [$adminApiController, 'saveUser']);
 $router->put('/mall/api/admin/users/{id}', [$adminApiController, 'saveUser']);
+$router->post('/mall/api/admin/users/{id}/status', [$adminApiController, 'updateUserStatus']);
+$router->post('/mall/api/admin/users/{id}/reset-password', [$adminApiController, 'resetUserPassword']);
 $router->get('/mall/api/admin/members', [$adminApiController, 'members']);
 $router->get('/mall/api/admin/member-classes', [$adminApiController, 'memberClasses']);
 $router->post('/mall/api/admin/members', [$adminApiController, 'saveMember']);

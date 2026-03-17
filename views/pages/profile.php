@@ -64,7 +64,7 @@
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h2 class="font-display text-2xl text-ink">收货地址</h2>
-                    <p class="mt-2 text-sm text-ink/60">新增和编辑地址会以模态框方式打开，移动端和桌面端都会固定在视口中央。</p>
+                    <p class="mt-2 text-sm text-ink/60">新增和编辑地址会以模态框方式打开，并自动避开顶部导航栏。</p>
                 </div>
                 <button @click="openAddressModal()" type="button" class="rounded-full bg-teal px-4 py-2 text-sm text-white shadow-card">新增地址</button>
             </div>
@@ -180,71 +180,73 @@
         </div>
     </div>
 
-    <div
-        x-show="addressModalOpen"
-        x-cloak
-        x-transition.opacity.duration.180ms
-        class="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 px-4 py-6 backdrop-blur-[2px]"
-        @click.self="closeAddressModal()"
-    >
-        <div x-transition.scale.opacity.duration.220ms class="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-[1.9rem] border border-bronze/10 bg-white/95 p-6 shadow-glow">
-            <div class="flex items-center justify-between gap-3">
-                <div>
-                    <h3 class="font-display text-2xl text-ink" x-text="addressForm.id ? '编辑地址' : '新增地址'"></h3>
-                    <p class="mt-1 text-sm text-ink/55">支持省、市、区三级联动，默认地址会自动置顶显示。</p>
+    <template x-teleport="body">
+        <div
+            x-show="addressModalOpen"
+            x-cloak
+            x-transition.opacity.duration.180ms
+            class="modal-overlay"
+            @click.self="closeAddressModal()"
+        >
+            <div x-transition.scale.opacity.duration.220ms class="modal-panel w-full max-w-2xl overflow-y-auto rounded-[1.9rem] border border-bronze/10 bg-white/95 p-6 shadow-glow">
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <h3 class="font-display text-2xl text-ink" x-text="addressForm.id ? '编辑地址' : '新增地址'"></h3>
+                        <p class="mt-1 text-sm text-ink/55">支持省、市、区三级联动，默认地址会自动置顶显示。</p>
+                    </div>
+                    <button @click="closeAddressModal()" type="button" class="rounded-full border border-bronze/15 px-3 py-2 text-sm text-bronze">关闭</button>
                 </div>
-                <button @click="closeAddressModal()" type="button" class="rounded-full border border-bronze/15 px-3 py-2 text-sm text-bronze">关闭</button>
+
+                <form @submit.prevent="saveAddress" class="mt-5 space-y-4">
+                    <input type="hidden" x-model="addressForm.id">
+                    <div class="grid gap-4 md:grid-cols-2">
+                        <label class="block text-sm text-ink/70">
+                            收货人
+                            <input x-model="addressForm.receiver_name" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" required>
+                        </label>
+                        <label class="block text-sm text-ink/70">
+                            手机号
+                            <input x-model="addressForm.receiver_phone" type="text" inputmode="numeric" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" required>
+                        </label>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+                        <select x-model="addressForm.province" @change="syncCities" class="rounded-2xl border-bronze/15 bg-parchment/55" required>
+                            <option value="">省份</option>
+                            <template x-for="province in regions" :key="province.name">
+                                <option :value="province.name" x-text="province.name"></option>
+                            </template>
+                        </select>
+                        <select x-model="addressForm.city" @change="syncDistricts" class="rounded-2xl border-bronze/15 bg-parchment/55" required>
+                            <option value="">城市</option>
+                            <template x-for="city in cities" :key="city.name">
+                                <option :value="city.name" x-text="city.name"></option>
+                            </template>
+                        </select>
+                        <select x-model="addressForm.district" class="rounded-2xl border-bronze/15 bg-parchment/55" required>
+                            <option value="">区县</option>
+                            <template x-for="district in districts" :key="district">
+                                <option :value="district" x-text="district"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    <label class="block text-sm text-ink/70">
+                        详细地址
+                        <textarea x-model="addressForm.detail_address" class="mt-2 min-h-28 w-full rounded-2xl border-bronze/15 bg-parchment/55" required></textarea>
+                    </label>
+
+                    <label class="flex items-center gap-2 text-sm text-ink/70">
+                        <input x-model="addressForm.is_default" type="checkbox" class="rounded border-bronze/20">
+                        设为默认地址
+                    </label>
+
+                    <div class="flex justify-end gap-2 pt-2">
+                        <button @click="closeAddressModal()" type="button" class="rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">取消</button>
+                        <button type="submit" class="rounded-full bg-teal px-5 py-2.5 text-sm text-white shadow-card">保存地址</button>
+                    </div>
+                </form>
             </div>
-
-            <form @submit.prevent="saveAddress" class="mt-5 space-y-4">
-                <input type="hidden" x-model="addressForm.id">
-                <div class="grid gap-4 md:grid-cols-2">
-                    <label class="block text-sm text-ink/70">
-                        收货人
-                        <input x-model="addressForm.receiver_name" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" required>
-                    </label>
-                    <label class="block text-sm text-ink/70">
-                        手机号
-                        <input x-model="addressForm.receiver_phone" type="text" inputmode="numeric" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" required>
-                    </label>
-                </div>
-
-                <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
-                    <select x-model="addressForm.province" @change="syncCities" class="rounded-2xl border-bronze/15 bg-parchment/55" required>
-                        <option value="">省份</option>
-                        <template x-for="province in regions" :key="province.name">
-                            <option :value="province.name" x-text="province.name"></option>
-                        </template>
-                    </select>
-                    <select x-model="addressForm.city" @change="syncDistricts" class="rounded-2xl border-bronze/15 bg-parchment/55" required>
-                        <option value="">城市</option>
-                        <template x-for="city in cities" :key="city.name">
-                            <option :value="city.name" x-text="city.name"></option>
-                        </template>
-                    </select>
-                    <select x-model="addressForm.district" class="rounded-2xl border-bronze/15 bg-parchment/55" required>
-                        <option value="">区县</option>
-                        <template x-for="district in districts" :key="district">
-                            <option :value="district" x-text="district"></option>
-                        </template>
-                    </select>
-                </div>
-
-                <label class="block text-sm text-ink/70">
-                    详细地址
-                    <textarea x-model="addressForm.detail_address" class="mt-2 min-h-28 w-full rounded-2xl border-bronze/15 bg-parchment/55" required></textarea>
-                </label>
-
-                <label class="flex items-center gap-2 text-sm text-ink/70">
-                    <input x-model="addressForm.is_default" type="checkbox" class="rounded border-bronze/20">
-                    设为默认地址
-                </label>
-
-                <div class="flex justify-end gap-2 pt-2">
-                    <button @click="closeAddressModal()" type="button" class="rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">取消</button>
-                    <button type="submit" class="rounded-full bg-teal px-5 py-2.5 text-sm text-white shadow-card">保存地址</button>
-                </div>
-            </form>
         </div>
-    </div>
+    </template>
 </section>

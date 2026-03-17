@@ -37,6 +37,11 @@ class UserService
         $stmt->execute([':id' => $userId]);
         $user = $stmt->fetch();
 
+        if (!$user || ($user['status'] ?? 'disabled') !== 'active') {
+            $this->session->forget('auth_user_id');
+            return null;
+        }
+
         return $user ?: null;
     }
 
@@ -187,7 +192,6 @@ class UserService
     public function createUser(array $data): array
     {
         $username = trim((string) ($data['username'] ?? ''));
-        $password = (string) ($data['password'] ?? '');
         $phone = trim((string) ($data['phone'] ?? ''));
         $membershipMemberId = !empty($data['membership_member_id']) ? (int) $data['membership_member_id'] : null;
         $allowDuplicateMembership = !empty($data['allow_duplicate_membership']);
@@ -195,13 +199,11 @@ class UserService
         if ($username === '') {
             throw new \RuntimeException('用户名不能为空。');
         }
-        if (strlen($password) < 8) {
-            throw new \RuntimeException('初始密码至少需要 8 位。');
-        }
         if ($this->findByUsername($username)) {
             throw new \RuntimeException('用户名已存在。');
         }
 
+        $password = $this->defaultPasswordFromPhone($phone);
         $this->assertPhoneUnique($phone, null);
         $this->assertMembershipBindingAvailable($membershipMemberId, null, $allowDuplicateMembership);
 
@@ -281,6 +283,30 @@ class UserService
         $stmt->execute($params);
 
         return $this->findUser($userId) ?? [];
+    }
+
+    public function updateUserStatus(int $userId, string $status): array
+    {
+        $normalizedStatus = $status === 'disabled' ? 'disabled' : 'active';
+        return $this->updateUser($userId, ['status' => $normalizedStatus]);
+    }
+
+    public function resetPasswordToDefault(int $userId): void
+    {
+        $user = $this->findUser($userId);
+        if (!$user) {
+            throw new \RuntimeException('用户不存在。');
+        }
+
+        $password = $this->defaultPasswordFromPhone((string) ($user['phone'] ?? ''));
+        $stmt = $this->db->mall()->prepare(
+            'UPDATE mall_users SET password_hash = :password_hash, updated_at = :updated_at WHERE id = :id'
+        );
+        $stmt->execute([
+            ':password_hash' => password_hash($password, PASSWORD_BCRYPT),
+            ':updated_at' => now(),
+            ':id' => $userId,
+        ]);
     }
 
     public function findUser(int $userId): ?array
@@ -483,5 +509,15 @@ class UserService
         $stmt->execute([':membership_member_id' => $membershipMemberId]);
         $row = $stmt->fetch();
         return $row ?: null;
+    }
+
+    private function defaultPasswordFromPhone(string $phone): string
+    {
+        $digits = preg_replace('/\D+/', '', $phone) ?? '';
+        if (strlen($digits) < 8) {
+            throw new \RuntimeException('请填写至少 8 位手机号，新用户初始密码默认为手机号后 8 位。');
+        }
+
+        return substr($digits, -8);
     }
 }
