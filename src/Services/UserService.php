@@ -62,10 +62,13 @@ class UserService
         $stmt = $this->db->mall()->prepare(
             'SELECT id, username, phone, password_hash, role, status
              FROM mall_users
-             WHERE username = :identifier OR phone = :identifier
+             WHERE username = :username OR phone = :phone
              LIMIT 1'
         );
-        $stmt->execute([':identifier' => $identifier]);
+        $stmt->execute([
+            ':username' => $identifier,
+            ':phone' => $identifier,
+        ]);
         $user = $stmt->fetch();
 
         if (!$user || !password_verify($password, (string) $user['password_hash']) || $user['status'] !== 'active') {
