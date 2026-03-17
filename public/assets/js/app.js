@@ -144,6 +144,21 @@
         badge.classList.toggle('is-empty', normalized === 0);
     };
 
+    const pulseFloatingCartBadge = () => {
+        const badge = document.querySelector('[data-floating-cart-count]');
+        if (!badge) {
+            return;
+        }
+
+        badge.classList.remove('is-pulsing');
+        void badge.offsetWidth;
+        badge.classList.add('is-pulsing');
+        window.clearTimeout(Number(badge.dataset.pulseTimer || 0));
+        badge.dataset.pulseTimer = String(window.setTimeout(() => {
+            badge.classList.remove('is-pulsing');
+        }, 420));
+    };
+
     const syncFloatingCartButton = () => {
         const button = document.querySelector('[data-floating-cart]');
         if (!button) {
@@ -611,9 +626,12 @@
                             quantity: Number(this.quickView.quantity) || 1,
                         },
                     });
-                    notice('已加入购物车。');
                     this.quickView.open = false;
                     await refreshFloatingCartCount();
+                    pulseFloatingCartBadge();
+                    if (window.innerWidth > 640) {
+                        notice('已加入购物车。');
+                    }
                 } catch (error) {
                     notice(error.message, 'error');
                 }

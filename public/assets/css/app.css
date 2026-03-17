@@ -24,6 +24,14 @@ body {
     background-color: #e9dbc9;
 }
 
+.mall-square-media {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    background-color: #e9dbc9;
+}
+
 .toast-stack {
     position: fixed;
     right: 1rem;
@@ -152,10 +160,28 @@ textarea {
     opacity: 0.72;
 }
 
+.floating-cart-badge.is-pulsing {
+    animation: floating-cart-badge-pulse 0.36s ease;
+}
+
 .back-top-button.is-visible {
     opacity: 1;
     pointer-events: auto;
     transform: translateY(0);
+}
+
+@keyframes floating-cart-badge-pulse {
+    0% {
+        transform: scale(1);
+    }
+
+    45% {
+        transform: scale(1.26);
+    }
+
+    100% {
+        transform: scale(1);
+    }
 }
 
 @media (min-width: 641px) {
@@ -179,6 +205,10 @@ textarea {
 
     .modal-overlay {
         align-items: flex-start;
+    }
+
+    .mall-quick-view-panel {
+        max-height: min(72vh, calc((100vh - var(--mall-header-offset) - (var(--mall-modal-gap) * 2)) * 0.72));
     }
 
     .back-top-button {
