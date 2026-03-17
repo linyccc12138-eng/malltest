@@ -1,0 +1,12 @@
+.playwright-cli/
+output/
+storage/logs/
+storage/cache/
+storage/sessions/
+storage/uploads/
+_remote_course_platform/
+mall-ecommerce-deploy-*.tar.gz
+*.tar
+remote_*.sh
+remote_*.sql
+fix_env_name.py

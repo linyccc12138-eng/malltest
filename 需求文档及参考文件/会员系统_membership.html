@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>猫猫的神秘商店</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding-bottom: 70px; background-color: #f4f4f4; color: #333; }
+        .container { padding: 15px; }
+        .tabs { display: flex; position: fixed; bottom: 0; left: 0; width: 100%; background-color: #333; color: white; z-index: 1000; box-shadow: 0 -2px 5px rgba(0,0,0,0.1); }
+        .tab-button { flex-grow: 1; padding: 15px 0; text-align: center; cursor: pointer; border: none; background-color: transparent; color: white; font-size: 1em; }
+        .tab-button.active { background-color: #555; font-weight: bold; }
+        .tab-content { display: none; animation: fadeIn 0.5s; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        h2 { color: #333; border-bottom: 2px solid #555; padding-bottom: 10px; }
+        
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .form-group input[type="text"],
+        .form-group input[type="number"],
+        .form-group input[type="date"],
+        .form-group select,
+        .form-group textarea {
+            width: calc(100% - 22px); 
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .form-group textarea { min-height: 60px; }
+        .button, button {
+            background-color: #5cb85c; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 1em; margin-right: 5px;
+        }
+        .button.search-btn, button.search-btn { background-color: #337ab7; }
+        .button.clear-btn, button.clear-btn { background-color: #f0ad4e; }
+        .button.delete-btn, button.delete-btn { background-color: #d9534f; }
+        .button.cancel-btn, button.cancel-btn { background-color: #777; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background-color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; word-wrap: break-word; }
+        th { background-color: #f0f0f0; }
+        .member-row, .detail-row { cursor: pointer; }
+        .member-row:hover, .detail-row:hover { background-color: #f9f9f9; }
+        .actions-row td, .detail-actions-row td { padding: 0; } 
+        .member-actions, .detail-actions { display: none; padding: 10px; background-color: #e9e9e9; border-top: 1px dashed #ccc; }
+        .member-actions button, .detail-actions button { margin: 5px; }
+
+
+        #memberTable, #detailsTable { 
+            table-layout: fixed; 
+            width: 100%; 
+        }
+
+        .modal {
+            display: none; position: fixed; z-index: 1001; left: 0; top: 0; width: 100%; height: 100%;
+            overflow: auto; background-color: rgba(0,0,0,0.5); animation: fadeInModal 0.3s;
+        }
+        .modal-content {
+            background-color: #fefefe; margin: 10% auto; padding: 20px; border: 1px solid #888;
+            width: 90%; max-width: 500px; border-radius: 5px; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        @keyframes fadeInModal { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        .close-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close-btn:hover, .close-btn:focus { color: black; text-decoration: none; }
+        .modal-footer { margin-top: 20px; text-align: right; }
+
+        @media (max-width: 600px) {
+            .tab-button { font-size: 0.9em; padding: 12px 0; }
+            .form-group input[type="text"],
+            .form-group input[type="number"],
+            .form-group input[type="date"],
+            .form-group select,
+            .form-group textarea { padding: 8px; }
+            .button, button { padding: 8px 12px; font-size: 0.9em; }
+            th, td { padding: 8px; font-size: 0.9em; } 
+            .modal-content { margin: 20% auto; width: 95%; }
+
+            #memberTable th, #memberTable td {
+                font-size: 70%;
+                padding: 3px;
+            }
+            #detailsTable th, #detailsTable td {
+                font-size: 50%; 
+                padding: 3px; 
+            }
+        }
+        .filter-bar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; align-items: center; }
+        .filter-bar .form-group { flex-grow: 1; margin-bottom: 0; }
+        .filter-bar button { align-self: flex-end; }
+
+    </style>
+</head>
+<body>
+
+    <div id="memberListTab" class="tab-content active">
+        <div class="container">
+            <h2>会员清单</h2>
+            <div class="filter-bar">
+                <div class="form-group">
+                    <label for="filterMemberClass">会员等级:</label>
+                    <select id="filterMemberClass">
+                        <option value="all">全部</option>
+                        </select>
+                </div>
+                <div class="form-group">
+                    <label for="memberSearchTerm">搜索:</label>
+                    <input type="text" id="memberSearchTerm" placeholder="会员编号/名称">
+                </div>
+                <button id="searchMemberBtn" class="search-btn">搜索</button>
+                <button id="resetMemberSearchBtn" class="clear-btn">重置</button> 
+            </div>
+            <table id="memberTable">
+                <colgroup>
+                    <col style="width: 18%;"> <col style="width: 23%;"> <col style="width: 20%;"> <col style="width: 20%;"> <col style="width: 19%;"> </colgroup>
+                <thead>
+                    <tr>
+                        <th>会员编号</th>
+                        <th>会员名称</th>
+                        <th>会员等级</th>
+                        <th>余额</th>
+                        <th>备注</th> 
+                    </tr>
+                </thead>
+                <tbody>
+                    </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="addMemberTab" class="tab-content">
+        <div class="container">
+            <h2>新增会员</h2>
+            <div class="form-group">
+                <label for="addMemberNumber">会员编号:</label>
+                <input type="text" id="addMemberNumber" required>
+            </div>
+            <div class="form-group">
+                <label for="addMemberName">会员名称:</label>
+                <input type="text" id="addMemberName" required>
+            </div>
+            <div class="form-group">
+                <label for="addMemberClass">会员等级:</label>
+                <select id="addMemberClass" required>
+                    </select>
+            </div>
+            <div class="form-group">
+                <label for="addRechargeAmount">充值金额:</label>
+                <input type="number" id="addRechargeAmount" step="0.01" required>
+            </div>
+            <div class="form-group"> 
+                <label for="addMemberMark">备注:</label>
+                <textarea id="addMemberMark"></textarea>
+            </div>
+            <button id="confirmAddMemberBtn">确定</button>
+            <button id="clearAddMemberFormBtn" class="clear-btn">清空</button>
+        </div>
+    </div>
+
+    <div id="detailsQueryTab" class="tab-content">
+        <div class="container">
+            <h2>明细查询</h2>
+            <div class="filter-bar">
+                <div class="form-group">
+                    <label for="detailsStartDate">开始日期:</label>
+                    <input type="date" id="detailsStartDate">
+                </div>
+                <div class="form-group">
+                    <label for="detailsEndDate">结束日期:</label>
+                    <input type="date" id="detailsEndDate">
+                </div>
+                <div class="form-group">
+                    <label for="detailsSearchTerm">会员名称搜索:</label>
+                    <input type="text" id="detailsSearchTerm" placeholder="会员名称">
+                </div>
+                <button id="searchDetailsBtn" class="search-btn">搜索</button>
+            </div>
+            <table id="detailsTable">
+                <colgroup>
+                    <col style="width: 15%;"> <col style="width: 5%;">  <col style="width: 14%;"> <col style="width: 13%;"> <col style="width: 15%;"> <col style="width: 14%;"> <col style="width: 14%;"> <col style="width: 10%;"> </colgroup>
+                <thead>
+                    <tr>
+                        <th>日期</th>
+                        <th>操作</th>
+                        <th>会员名称</th>
+                        <th>等级名称</th>
+                        <th>商品名称</th>
+                        <th>调整金额</th>
+                        <th>调整后余额</th>
+                        <th>备注</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="editMemberModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('editMemberModal')">&times;</span>
+            <h3>修改会员信息</h3>
+            <input type="hidden" id="editMemberFid">
+            <div class="form-group">
+                <label for="editMemberNumber">会员编号:</label>
+                <input type="text" id="editMemberNumber" required>
+            </div>
+            <div class="form-group">
+                <label for="editMemberNameModal">会员名称:</label> <input type="text" id="editMemberNameModal" required>
+            </div>
+            <div class="form-group">
+                <label for="editMemberClassModal">会员等级:</label> <select id="editMemberClassModal" required>
+                    </select>
+            </div>
+            <div class="form-group">
+                <label for="editMemberBalance">余额:</label>
+                <input type="number" id="editMemberBalance" step="0.01" required>
+            </div>
+            <div class="form-group">
+                <label for="editMemberMark">备注:</label> 
+                <textarea id="editMemberMark"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button id="confirmUpdateMemberBtn">确定</button>
+                <button id="deleteMemberBtn" class="delete-btn">删除</button>
+                <button class="cancel-btn" onclick="closeModal('editMemberModal')">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="rechargeModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('rechargeModal')">&times;</span>
+            <h3>会员充值</h3>
+            <input type="hidden" id="rechargeMemberFid">
+            <p>会员: <span id="rechargeMemberNameDisplay"></span></p>
+            <div class="form-group">
+                <label for="rechargeAmount">充值金额:</label>
+                <input type="number" id="rechargeAmount" step="0.01" required>
+            </div>
+            <div class="form-group">
+                <label for="rechargeMemberClassModal">会员等级 (可调整):</label>
+                <select id="rechargeMemberClassModal" required>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="rechargeMark">备注:</label> 
+                <textarea id="rechargeMark"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button id="confirmRechargeBtn">确定</button>
+                <button class="cancel-btn" onclick="closeModal('rechargeModal')">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="consumeModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('consumeModal')">&times;</span>
+            <h3>会员消费</h3>
+            <input type="hidden" id="consumeMemberFid">
+            <p>会员: <span id="consumeMemberNameDisplay"></span> (等级: <span id="consumeMemberClassDisplay"></span>, 余额: <span id="consumeMemberBalanceDisplay"></span>)</p>
+             <div class="form-group">
+                <label for="consumeGoods">商品名称:</label>
+                <input type="text" id="consumeGoods" required>
+            </div>
+            <div class="form-group" style="display: none;">
+                <label for="consumeOriginalAmount">消费金额:</label>
+                <input type="number" id="consumeOriginalAmount" step="0.01" required>
+            </div>
+            <div class="form-group" style="display: none;">
+                <label for="consumeDiscount">折扣 (<span id="consumeClassDiscountDisplay">1.00</span>):</label>
+                <input type="number" id="consumeDiscount" step="0.01" value="1.00" readonly>
+            </div>
+            <div class="form-group">
+                <label for="consumeActualAmount">实际支付金额:</label>
+                <input type="number" id="consumeActualAmount" step="0.01" required>
+            </div>
+            <div class="form-group">
+                <label for="consumeMark">备注:</label> 
+                <textarea id="consumeMark"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button id="confirmConsumeBtn">确定</button>
+                <button class="cancel-btn" onclick="closeModal('consumeModal')">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="editDetailModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('editDetailModal')">&times;</span>
+            <h3>修改明细记录</h3>
+            <input type="hidden" id="editDetailFid">
+            <p>会员: <span id="editDetailMemberNameDisplay"></span> (<span id="editDetailOriginalDateDisplay"></span>)</p>
+            <div class="form-group">
+                <label for="editDetailGoods">商品名称:</label>
+                <input type="text" id="editDetailGoods">
+            </div>
+            <div class="form-group">
+                <label for="editDetailAmount">调整金额:</label>
+                <input type="number" id="editDetailAmount" step="0.01">
+            </div>
+            <div class="form-group">
+                <label for="editDetailBalanceDisplay">调整后余额 (自动计算):</label>
+                <input type="text" id="editDetailBalanceDisplay" readonly style="background-color: #eee;">
+            </div>
+            <div class="form-group">
+                <label for="editDetailMark">备注:</label>
+                <textarea id="editDetailMark"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button id="confirmUpdateDetailBtn">确定修改</button>
+                <button class="cancel-btn" onclick="closeModal('editDetailModal')">取消</button>
+            </div>
+        </div>
+    </div>
+
+
+    <div class="tabs">
+        <button class="tab-button active" onclick="openTab(event, 'memberListTab')">会员清单</button>
+        <button class="tab-button" onclick="openTab(event, 'addMemberTab')">新增会员</button>
+        <button class="tab-button" onclick="openTab(event, 'detailsQueryTab')">明细查询</button>
+    </div>
+
+<script>
+    let memberClasses = []; 
+    let currentEditingMember = null; 
+    // 用于存储正在编辑的明细的原始金额、余额和操作类型 (fmode)
+    let currentEditingDetailOriginals = {}; 
+    window.justSwitchedToDetailsForSpecificMember = false;
+    let currentDetailFilters = { startDate: '', endDate: '', searchTerm: '', memberId: null };
+
+
+    function openTab(evt, tabName) {
+        let i, tabcontent, tablinks;
+        tabcontent = document.getElementsByClassName("tab-content");
+        for (i = 0; i < tabcontent.length; i++) {
+            tabcontent[i].style.display = "none";
+            tabcontent[i].classList.remove("active");
+        }
+        tablinks = document.getElementsByClassName("tab-button");
+        for (i = 0; i < tablinks.length; i++) {
+            tablinks[i].classList.remove("active");
+        }
+        document.getElementById(tabName).style.display = "block";
+        document.getElementById(tabName).classList.add("active");
+        evt.currentTarget.classList.add("active");
+
+        if (tabName === 'memberListTab') {
+            loadMembers();
+        } else if (tabName === 'detailsQueryTab') {
+            if (!window.justSwitchedToDetailsForSpecificMember) {
+                document.getElementById('detailsStartDate').value = currentDetailFilters.startDate || '';
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('detailsEndDate').value = currentDetailFilters.endDate || today;
+                document.getElementById('detailsSearchTerm').value = currentDetailFilters.searchTerm || '';
+                loadMemberDetails(currentDetailFilters.memberId);
+            }
+            window.justSwitchedToDetailsForSpecificMember = false;
+        }
+    }
+
+    function openModal(modalId) {
+        document.getElementById(modalId).style.display = "block";
+    }
+
+    function closeModal(modalId) {
+        document.getElementById(modalId).style.display = "none";
+    }
+
+    async function loadMemberClasses() {
+        try {
+            const response = await fetch('/membership/api/classes');
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            memberClasses = await response.json();
+            populateClassSelect('filterMemberClass', true);
+            populateClassSelect('addMemberClass');
+            populateClassSelect('editMemberClassModal');
+            populateClassSelect('rechargeMemberClassModal');
+        } catch (error) {
+            alert("加载会员等级失败: " + error.message);
+        }
+    }
+
+    function populateClassSelect(selectId, includeAll = false) {
+        const selectElement = document.getElementById(selectId);
+        selectElement.innerHTML = '';
+        if (includeAll) {
+            const allOption = document.createElement('option');
+            allOption.value = "all";
+            allOption.textContent = "全部";
+            selectElement.appendChild(allOption);
+        }
+        memberClasses.forEach(cls => {
+            const option = document.createElement('option');
+            option.value = cls.fid;
+            option.textContent = cls.fname;
+            option.dataset.foff = cls.foff;
+            selectElement.appendChild(option);
+        });
+    }
+
+    function getClassById(classId) {
+        return memberClasses.find(cls => String(cls.fid) === String(classId));
+    }
+    function getClassNameById(classId) {
+        const cls = getClassById(classId);
+        return cls ? cls.fname : '未知等级';
+    }
+
+    async function loadMembers() {
+        const classId = document.getElementById('filterMemberClass').value;
+        const searchTerm = document.getElementById('memberSearchTerm').value.trim();
+        try {
+            const response = await fetch(`/membership/api/members?class_id=${classId}&search_term=${encodeURIComponent(searchTerm)}`);
+            if (!response.ok) {
+                let errorMsg = `HTTP error! status: ${response.status}`;
+                try { 
+                    const errData = await response.json(); 
+                    errorMsg = errData.error || errorMsg; 
+                } catch (e) { /* ignore */ }
+                throw new Error(errorMsg);
+            }
+            const members = await response.json();
+            const tableBody = document.getElementById('memberTable').getElementsByTagName('tbody')[0];
+            tableBody.innerHTML = '';
+            members.forEach(member => {
+                const row = tableBody.insertRow();
+                row.classList.add('member-row');
+                row.dataset.member = JSON.stringify(member); 
+
+                row.insertCell().textContent = member.fnumber;
+                row.insertCell().textContent = member.fname;
+                row.insertCell().textContent = member.fclassesname;
+                let balance = parseFloat(member.fbalance);
+                row.insertCell().textContent = isNaN(balance) ? 'N/A' : balance.toFixed(2);
+                row.insertCell().textContent = member.fmark || ''; 
+
+                row.onclick = function() { toggleActions(this, '.member-actions', '.actions-row'); };
+
+                const actionsRow = tableBody.insertRow();
+                actionsRow.classList.add('actions-row');
+                const actionsCell = actionsRow.insertCell();
+                actionsCell.colSpan = 5; 
+                actionsCell.innerHTML = `
+                    <div class="member-actions">
+                        <button onclick="event.stopPropagation(); openEditModal(this.closest('.actions-row').previousElementSibling)">修改</button>
+                        <button onclick="event.stopPropagation(); openRechargeModal(this.closest('.actions-row').previousElementSibling)">充值</button>
+                        <button onclick="event.stopPropagation(); openConsumeModal(this.closest('.actions-row').previousElementSibling)">消费</button>
+                        <button onclick="event.stopPropagation(); viewMemberDetails(${member.fid})">明细</button>
+                    </div>
+                `;
+                actionsRow.style.display = 'none';
+            });
+        } catch (error) {
+            alert("加载会员列表失败: " + error.message);
+        }
+    }
+    
+    function toggleActions(rowElement, actionsSelector, actionsRowSelector) {
+        const actionsRow = rowElement.nextElementSibling;
+        if (actionsRow && actionsRow.matches(actionsRowSelector)) {
+            const actionsDiv = actionsRow.querySelector(actionsSelector);
+            if (actionsDiv.style.display === 'block' || actionsDiv.style.display === '') {
+                actionsDiv.style.display = 'none';
+                actionsRow.style.display = 'none';
+            } else {
+                document.querySelectorAll(actionsSelector).forEach(div => div.style.display = 'none');
+                document.querySelectorAll(actionsRowSelector).forEach(ar => { if (ar !== actionsRow) ar.style.display = 'none';});
+                
+                actionsDiv.style.display = 'block';
+                actionsRow.style.display = 'table-row';
+            }
+        }
+    }
+
+
+    document.getElementById('searchMemberBtn').addEventListener('click', loadMembers);
+    document.getElementById('filterMemberClass').addEventListener('change', loadMembers);
+    document.getElementById('resetMemberSearchBtn').addEventListener('click', resetMemberSearch);
+
+    function resetMemberSearch() {
+        document.getElementById('filterMemberClass').value = "all"; 
+        document.getElementById('memberSearchTerm').value = "";   
+        loadMembers(); 
+    }
+
+    function openEditModal(rowElement) {
+        currentEditingMember = JSON.parse(rowElement.dataset.member);
+        document.getElementById('editMemberFid').value = currentEditingMember.fid;
+        document.getElementById('editMemberNumber').value = currentEditingMember.fnumber;
+        document.getElementById('editMemberNameModal').value = currentEditingMember.fname;
+        document.getElementById('editMemberClassModal').value = currentEditingMember.fclassesid;
+        document.getElementById('editMemberBalance').value = parseFloat(currentEditingMember.fbalance).toFixed(2);
+        document.getElementById('editMemberMark').value = currentEditingMember.fmark || ''; 
+        openModal('editMemberModal');
+    }
+
+    document.getElementById('confirmUpdateMemberBtn').addEventListener('click', async () => {
+        const memberId = document.getElementById('editMemberFid').value;
+        const fnumber = document.getElementById('editMemberNumber').value.trim();
+        const fname = document.getElementById('editMemberNameModal').value.trim();
+        const fclassesid = document.getElementById('editMemberClassModal').value;
+        const fbalance = document.getElementById('editMemberBalance').value.trim();
+        const fmark = document.getElementById('editMemberMark').value.trim(); 
+
+        if (!fnumber || !fname || !fclassesid || fbalance === '') {
+            alert('会员编号、名称、等级和余额不能为空！'); return;
+        }
+        if (isNaN(parseFloat(fbalance))) {
+            alert('余额必须是有效的数字！'); return;
+        }
+        const selectedClass = getClassById(fclassesid);
+        if (!selectedClass) { alert('无效的会员等级！'); return; }
+        const fclassesname = selectedClass.fname;
+        if (!confirm('确定更新信息吗？')) return;
+
+        try {
+            const response = await fetch(`/membership/api/member/${memberId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fnumber, fname, fclassesid, fclassesname, fbalance: parseFloat(fbalance).toFixed(2), fmark })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
+            alert(result.message || '会员信息更新成功！');
+            closeModal('editMemberModal');
+            loadMembers();
+        } catch (error) {
+            alert("更新会员失败: " + error.message);
+        }
+    });
+
+    document.getElementById('deleteMemberBtn').addEventListener('click', async () => {
+        const memberId = document.getElementById('editMemberFid').value;
+        if (!confirm('确定删除该会员吗？删除后该会员相关的明细记录将会保留，但此会员账户将被移除。')) return;
+        try {
+            const response = await fetch(`/membership/api/member/${memberId}`, { method: 'DELETE' });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
+            alert(result.message || '会员删除成功！');
+            closeModal('editMemberModal');
+            loadMembers();
+        } catch (error) {
+            alert("删除会员失败: " + error.message);
+        }
+    });
+
+    function openRechargeModal(rowElement) {
+        currentEditingMember = JSON.parse(rowElement.dataset.member);
+        document.getElementById('rechargeMemberFid').value = currentEditingMember.fid;
+        document.getElementById('rechargeMemberNameDisplay').textContent = currentEditingMember.fname;
+        document.getElementById('rechargeAmount').value = '';
+        document.getElementById('rechargeMemberClassModal').value = currentEditingMember.fclassesid;
+        document.getElementById('rechargeMark').value = ''; 
+        openModal('rechargeModal');
+    }
+    document.getElementById('confirmRechargeBtn').addEventListener('click', async () => {
+        const memberId = document.getElementById('rechargeMemberFid').value;
+        const famount = document.getElementById('rechargeAmount').value.trim();
+        const fclassesid = document.getElementById('rechargeMemberClassModal').value;
+        const fmark = document.getElementById('rechargeMark').value.trim(); 
+
+        if (famount === '' || isNaN(parseFloat(famount)) || parseFloat(famount) <= 0) {
+            alert('充值金额必须为大于0的有效数字！'); return;
+        }
+        if (!fclassesid) { alert('请选择会员等级！'); return; }
+        const selectedClass = getClassById(fclassesid);
+        if (!selectedClass) { alert('无效的会员等级！'); return; }
+        const fclassesname = selectedClass.fname;
+        if (!confirm('确定为该会员充值吗？')) return;
+
+        try {
+            const response = await fetch(`/membership/api/member/${memberId}/recharge`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ famount: parseFloat(famount).toFixed(2), fclassesid, fclassesname, fmark })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
+            alert(result.message || '充值成功！');
+            closeModal('rechargeModal');
+            loadMembers();
+        } catch (error) {
+            alert("充值失败: " + error.message);
+        }
+    });
+
+    function openConsumeModal(rowElement) {
+        currentEditingMember = JSON.parse(rowElement.dataset.member);
+        document.getElementById('consumeMemberFid').value = currentEditingMember.fid;
+        document.getElementById('consumeMemberNameDisplay').textContent = currentEditingMember.fname;
+        document.getElementById('consumeMemberClassDisplay').textContent = currentEditingMember.fclassesname;
+        document.getElementById('consumeMemberBalanceDisplay').textContent = parseFloat(currentEditingMember.fbalance).toFixed(2);
+        const memberClassInfo = getClassById(currentEditingMember.fclassesid);
+        const discount = memberClassInfo && memberClassInfo.foff ? parseFloat(memberClassInfo.foff) : 1.00;
+        document.getElementById('consumeDiscount').value = discount.toFixed(2);
+        document.getElementById('consumeClassDiscountDisplay').textContent = discount.toFixed(2);
+        document.getElementById('consumeGoods').value = '';
+        const originalAmountInput = document.getElementById('consumeOriginalAmount');
+        const actualAmountInput = document.getElementById('consumeActualAmount');
+        originalAmountInput.value = '';
+        actualAmountInput.value = '';
+        document.getElementById('consumeMark').value = ''; 
+        const calculateActual = () => {
+            const original = parseFloat(originalAmountInput.value);
+            if (!isNaN(original) && original > 0) {
+                actualAmountInput.value = (original * discount).toFixed(2);
+            } else {
+                actualAmountInput.value = '';
+            }
+        };
+        originalAmountInput.oninput = calculateActual;
+        openModal('consumeModal');
+    }
+
+    document.getElementById('confirmConsumeBtn').addEventListener('click', async () => {
+        const memberId = document.getElementById('consumeMemberFid').value;
+        const fgoods = document.getElementById('consumeGoods').value.trim(); 
+        const factual_amount_str = document.getElementById('consumeActualAmount').value.trim(); 
+        const fmark = document.getElementById('consumeMark').value.trim(); 
+
+        if (!fgoods || factual_amount_str === '') { alert('商品名称和实际支付金额不能为空！'); return; }
+        const factual_amount = parseFloat(factual_amount_str);
+        if (isNaN(factual_amount) || factual_amount <= 0) { alert('实际支付金额必须是大于0的有效数字！'); return; }
+        const currentBalance = parseFloat(document.getElementById('consumeMemberBalanceDisplay').textContent);
+        if (factual_amount > currentBalance) { alert('会员余额不足！'); return; }
+        if (!confirm('确定记录此笔消费吗？')) return;
+
+        try {
+            const response = await fetch(`/membership/api/member/${memberId}/consume`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fgoods, factual_amount: factual_amount.toFixed(2), fmark })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
+            alert(result.message || '消费成功！');
+            closeModal('consumeModal');
+            loadMembers();
+        } catch (error) {
+            alert("消费记录失败: " + error.message);
+        }
+    });
+
+    document.getElementById('confirmAddMemberBtn').addEventListener('click', async () => {
+        const fnumber = document.getElementById('addMemberNumber').value.trim();
+        const fname = document.getElementById('addMemberName').value.trim();
+        const fclassesid = document.getElementById('addMemberClass').value;
+        const famount = document.getElementById('addRechargeAmount').value.trim();
+        const fmark = document.getElementById('addMemberMark').value.trim(); 
+
+        if (!fnumber || !fname || !fclassesid || famount === '') {
+            alert('会员编号、名称、等级和充值金额不能为空！'); return;
+        }
+        if (isNaN(parseFloat(famount)) || parseFloat(famount) <= 0) {
+            alert('充值金额必须为大于0的有效数字！'); return;
+        }
+        const selectedClass = getClassById(fclassesid);
+        if (!selectedClass) { alert('无效的会员等级！'); return; }
+        const fclassesname = selectedClass.fname;
+        if (!confirm('确定新增该会员吗？')) return;
+
+        try {
+            const response = await fetch('/membership/api/member', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fnumber, fname, fclassesid, fclassesname, famount: parseFloat(famount).toFixed(2), fmark }) 
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
+            alert(result.message || '会员新增成功！');
+            clearAddMemberForm();
+            loadMembers(); 
+        } catch (error) {
+            alert("新增会员失败: " + error.message);
+        }
+    });
+
+    function clearAddMemberForm() {
+        document.getElementById('addMemberNumber').value = '';
+        document.getElementById('addMemberName').value = '';
+        if (document.getElementById('addMemberClass').options.length > 0) {
+             document.getElementById('addMemberClass').selectedIndex = 0;
+        }
+        document.getElementById('addRechargeAmount').value = '';
+        document.getElementById('addMemberMark').value = ''; 
+    }
+    document.getElementById('clearAddMemberFormBtn').addEventListener('click', clearAddMemberForm);
+
+    async function loadMemberDetails(memberId = null) {
+        currentDetailFilters.memberId = memberId;
+        if (!memberId) { 
+            currentDetailFilters.startDate = document.getElementById('detailsStartDate').value;
+            currentDetailFilters.endDate = document.getElementById('detailsEndDate').value;
+            currentDetailFilters.searchTerm = document.getElementById('detailsSearchTerm').value.trim();
+        }
+
+        let url = '/membership/api/member_details?';
+        const queryParams = new URLSearchParams();
+
+        if (currentDetailFilters.memberId) {
+            queryParams.append('member_id', currentDetailFilters.memberId);
+        } else {
+            if (currentDetailFilters.startDate) queryParams.append('start_date', currentDetailFilters.startDate);
+            if (currentDetailFilters.endDate) queryParams.append('end_date', currentDetailFilters.endDate);
+            if (currentDetailFilters.searchTerm) queryParams.append('search_term', currentDetailFilters.searchTerm);
+        }
+        url += queryParams.toString();
+
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                 let errorMsg = `HTTP error! status: ${response.status}`;
+                 try { const errData = await response.json(); errorMsg = errData.error || errorMsg; } catch (e) {}
+                 throw new Error(errorMsg);
+            }
+            const details = await response.json();
+            const tableBody = document.getElementById('detailsTable').getElementsByTagName('tbody')[0];
+            tableBody.innerHTML = '';
+            details.forEach(detail => {
+                const row = tableBody.insertRow();
+                row.classList.add('detail-row');
+                row.dataset.detail = JSON.stringify(detail);
+
+                row.insertCell().textContent = detail.fdate;
+                row.insertCell().textContent = detail.fmode;
+                row.insertCell().textContent = detail.fmembername;
+                row.insertCell().textContent = detail.fclassesname;
+                row.insertCell().textContent = detail.fgoods || '';
+                let famount = parseFloat(detail.famount);
+                let fbalance = parseFloat(detail.fbalance);
+                row.insertCell().textContent = isNaN(famount) ? 'N/A' : famount.toFixed(2);
+                row.insertCell().textContent = isNaN(fbalance) ? 'N/A' : fbalance.toFixed(2);
+                row.insertCell().textContent = detail.fmark || '';
+                
+                row.onclick = function() { toggleActions(this, '.detail-actions', '.detail-actions-row'); };
+
+                const actionsRow = tableBody.insertRow();
+                actionsRow.classList.add('detail-actions-row');
+                const actionsCell = actionsRow.insertCell();
+                actionsCell.colSpan = 8;
+                actionsCell.innerHTML = `
+                    <div class="detail-actions">
+                        <button onclick="event.stopPropagation(); openEditDetailModalHandler(this.closest('.detail-actions-row').previousElementSibling)">修改</button>
+                        <button class="delete-btn" onclick="event.stopPropagation(); deleteDetailHandler(this.closest('.detail-actions-row').previousElementSibling)">删除</button>
+                    </div>
+                `;
+                actionsRow.style.display = 'none';
+            });
+        } catch (error) {
+            alert("加载会员明细失败: " + error.message + "\nURL: " + url);
+        }
+    }
+    document.getElementById('searchDetailsBtn').addEventListener('click', () => {
+        loadMemberDetails(); 
+    });
+
+    function viewMemberDetails(memberId) {
+        window.justSwitchedToDetailsForSpecificMember = true;
+        currentDetailFilters = { startDate: '', endDate: new Date().toISOString().split('T')[0], searchTerm: '', memberId: memberId };
+        
+        const detailTabButton = Array.from(document.querySelectorAll('.tab-button')).find(btn => btn.textContent === '明细查询');
+        if (detailTabButton) {
+             document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(tc => {
+                tc.style.display = 'none';
+                tc.classList.remove('active');
+            });
+            detailTabButton.classList.add('active');
+            document.getElementById('detailsQueryTab').style.display = 'block';
+            document.getElementById('detailsQueryTab').classList.add('active');
+
+            document.getElementById('detailsStartDate').value = currentDetailFilters.startDate; 
+            document.getElementById('detailsEndDate').value = currentDetailFilters.endDate;
+            document.getElementById('detailsSearchTerm').value = currentDetailFilters.searchTerm;
+            loadMemberDetails(memberId); 
+        }
+    }
+
+    function openEditDetailModalHandler(rowElement) {
+        const detailData = JSON.parse(rowElement.dataset.detail);
+        // 存储原始数据，包括fmode，用于计算显示余额
+        currentEditingDetailOriginals = {
+            famount: parseFloat(detailData.famount) || 0,
+            fbalance: parseFloat(detailData.fbalance) || 0,
+            fmode: detailData.fmode // 新增：存储操作类型
+        };
+
+        document.getElementById('editDetailFid').value = detailData.fid;
+        document.getElementById('editDetailMemberNameDisplay').textContent = detailData.fmembername;
+        document.getElementById('editDetailOriginalDateDisplay').textContent = `原日期: ${detailData.fdate}`; // 可以显示原操作类型： (${detailData.fmode})
+        document.getElementById('editDetailGoods').value = detailData.fgoods || '';
+        document.getElementById('editDetailAmount').value = parseFloat(detailData.famount).toFixed(2);
+        document.getElementById('editDetailMark').value = detailData.fmark || '';
+        
+        calculateAndUpdateDetailBalanceDisplay();
+        document.getElementById('editDetailAmount').oninput = calculateAndUpdateDetailBalanceDisplay;
+        
+        openModal('editDetailModal');
+    }
+
+    function calculateAndUpdateDetailBalanceDisplay() {
+        const newAmountInputEl = document.getElementById('editDetailAmount');
+        const newAmountStr = newAmountInputEl.value;
+        const newAmount = parseFloat(newAmountStr); // 这是从输入框获取的“新调整金额”
+
+        const displayBalanceEl = document.getElementById('editDetailBalanceDisplay');
+
+        if (isNaN(newAmount) && newAmountStr !== "" && newAmountStr !== "-" && !newAmountStr.endsWith('.')) {
+            displayBalanceEl.value = "无效金额";
+            return;
+        }
+        if (isNaN(newAmount)) { 
+             displayBalanceEl.value = parseFloat(currentEditingDetailOriginals.fbalance).toFixed(2);
+             return;
+        }
+
+        const old_balance = currentEditingDetailOriginals.fbalance; // 原记录中的余额
+        const old_amount = currentEditingDetailOriginals.famount; // 原记录中的金额
+        let real_old_amount = currentEditingDetailOriginals.famount; ; // 原纪录金额的真实值，用于公式
+        let real_newAmount = newAmount; // “新调整金额”的值，用于公式
+
+        // 根据用户要求：如果操作类型是“消费”，则在计算显示用余额时，将“新调整金额”乘以 -1
+        if (currentEditingDetailOriginals.fmode === '消费') {
+            real_old_amount = old_amount * -1; // 原纪录金额的真实值
+            real_newAmount = newAmount * -1;
+        }
+
+        // 计算公式：原记录余额 - 原记录金额 + (处理后的新调整金额)
+        // 这个公式是基于 menmberdetail.fbalance 的更新逻辑： new_balance = old_balance - old_amount + new_amount
+        // 当 fmode 为 '消费' 时，new_amount 对于此公式的效果变为负值
+        const calculatedBalance = old_balance - real_old_amount + real_newAmount;
+        
+        displayBalanceEl.value = calculatedBalance.toFixed(2);
+    }
+
+    document.getElementById('confirmUpdateDetailBtn').addEventListener('click', async () => {
+        const detailId = document.getElementById('editDetailFid').value;
+        const fgoods = document.getElementById('editDetailGoods').value.trim();
+        const famountStr = document.getElementById('editDetailAmount').value.trim();
+        const fmark = document.getElementById('editDetailMark').value.trim();
+
+        if (famountStr === '') {
+            alert('调整金额不能为空！'); return;
+        }
+        if (isNaN(parseFloat(famountStr))) {
+            alert('调整金额必须是有效的数字！'); return;
+        }
+        // famount 始终发送正值或用户输入的实际值给后端，后端根据 fmode 处理其对总余额的影响
+        const famount = parseFloat(famountStr).toFixed(2); 
+
+        if (!confirm('确定要修改这条明细记录吗？')) return;
+
+        try {
+            const response = await fetch(`/membership/api/member_detail/${detailId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fgoods, famount, fmark }) // famount 发送的是输入框的值
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
+            
+            alert(result.message || '明细修改成功！');
+            closeModal('editDetailModal');
+            loadMemberDetails(currentDetailFilters.memberId); 
+        } catch (error) {
+            alert("修改明细失败: " + error.message);
+        }
+    });
+
+    async function deleteDetailHandler(rowElement) {
+        const detailData = JSON.parse(rowElement.dataset.detail);
+        const detailId = detailData.fid;
+
+        if (!confirm(`确定要删除这条明细吗？\n会员: ${detailData.fmembername}\n日期: ${detailData.fdate}\n金额: ${detailData.famount}`)) return;
+
+        try {
+            const response = await fetch(`/membership/api/member_detail/${detailId}`, {
+                method: 'DELETE'
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
+
+            alert(result.message || '明细删除成功！');
+            loadMemberDetails(currentDetailFilters.memberId); 
+        } catch (error) {
+            alert("删除明细失败: " + error.message);
+        }
+    }
+
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const today = new Date().toISOString().split('T')[0];
+        currentDetailFilters.endDate = today; 
+        document.getElementById('detailsEndDate').value = today; 
+
+        loadMemberClasses().then(() => {
+            const activeTabButton = document.querySelector('.tab-button.active');
+            if (activeTabButton) {
+                const activeTabName = activeTabButton.getAttribute('onclick').match(/'([^']+)'/)[1];
+                openTab({currentTarget: activeTabButton}, activeTabName); 
+            } else if (document.querySelectorAll('.tab-button').length > 0) {
+                const firstTabButton = document.querySelector('.tab-button');
+                openTab({currentTarget: firstTabButton}, firstTabButton.getAttribute('onclick').match(/'([^']+)'/)[1]);
+            }
+        });
+    });
+</script>
+
+</body>
+</html>

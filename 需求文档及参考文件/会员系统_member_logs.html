@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>会员日志</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<style>
+        body { 
+            font-family: sans-serif; 
+            margin: 5px; 
+        }
+        h1 { text-align: center; color: #333; }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 20px; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+            table-layout: fixed; 
+        }
+        th, td { 
+            border: 1px solid #ddd; 
+            padding: 10px 12px; 
+            text-align: left; 
+            font-size: 14px; 
+            word-break: break-all; 
+        }
+        th { 
+            background-color: #f2f2f2; 
+            color: #333; 
+            position: sticky; 
+            top: 0; 
+            z-index: 1; 
+        }
+        .filter-input { 
+            width: 95%; 
+            padding: 6px; 
+            margin-bottom: 5px; 
+            border: 1px solid #ccc; 
+            border-radius: 4px; 
+            box-sizing: border-box; 
+            font-size: 13px; 
+        }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        tr:hover { background-color: #f1f1f1; }
+        .no-data td { text-align: center; color: #777; padding: 20px; }
+
+        @media (max-width: 768px) {
+            body, table, th, td, .filter-input {
+                font-size: 70% !important;
+            }
+             th, td {
+                padding: 6px 8px;
+            }
+            .filter-input {
+                width: 99%; /* 移动端搜索框宽度调整为100% */
+                padding: 4px;
+                margin-bottom: 3px;
+            }
+            h1 {
+                 font-size: 1.5em; 
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>👥 会员明细日志</h1>
+    <table id="memberLogTable">
+        <colgroup>
+            <col style="width: 14%;"> <col style="width: 8%;"> <col style="width: 10%;"> <col style="width: 9%;"> <col style="width: 18%;"> <col style="width: 12%;"> <col style="width: 12%;"> <col style="width: 17%;"> </colgroup>
+        <thead>
+            <tr>
+                <th>日期 <input type="date" class="filter-input" data-column="fdate_date"></th>
+                <th>操作 <input type="text" class="filter-input" data-column="fmode" placeholder="筛选操作模式"></th>
+                <th>会员 <input type="text" class="filter-input" data-column="fmembername" placeholder="筛选会员名称"></th>
+                <th>登记 <input type="text" class="filter-input" data-column="fclassesname" placeholder="筛选等级名称"></th>
+                <th>商品 <input type="text" class="filter-input" data-column="fgoods" placeholder="筛选商品"></th>
+                <th>调整金额 <input type="text" class="filter-input" data-column="famount" placeholder="筛选金额"></th>
+                <th>调整余额 <input type="text" class="filter-input" data-column="fbalance" placeholder="筛选余额"></th>
+                <th>备注 <input type="text" class="filter-input" data-column="fmark" placeholder="筛选备注"></th>
+            </tr>
+        </thead>
+        <tbody>
+            </tbody>
+    </table>
+
+    <script>
+        const API_URL_MEMBER = '/api/member_logs';
+        const memberTableBody = document.querySelector('#memberLogTable tbody');
+        const memberFilterInputs = document.querySelectorAll('#memberLogTable .filter-input');
+        const NUM_MEMBER_COLUMNS = 8; 
+
+        async function fetchMemberLogs(filters = {}) {
+            const queryParams = new URLSearchParams();
+            for (const key in filters) {
+                if (filters[key]) { 
+                    queryParams.append(key, filters[key]);
+                }
+            }
+
+            try {
+                const response = await fetch(`${API_URL_MEMBER}?${queryParams.toString()}`);
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                }
+                const logs = await response.json();
+                renderMemberTable(logs);
+            } catch (error) {
+                console.error('获取会员日志数据失败:', error);
+                memberTableBody.innerHTML = `<tr class="no-data"><td colspan="${NUM_MEMBER_COLUMNS}">加载数据失败: ${error.message}</td></tr>`;
+            }
+        }
+
+        function renderMemberTable(logs) {
+            memberTableBody.innerHTML = ''; 
+            if (logs.length === 0) {
+                memberTableBody.innerHTML = `<tr class="no-data"><td colspan="${NUM_MEMBER_COLUMNS}">没有找到相关日志。</td></tr>`;
+                return;
+            }
+            logs.forEach(log => {
+                const row = memberTableBody.insertRow();
+                row.insertCell().textContent = log.fdate || '';
+                row.insertCell().textContent = log.fmode || '';
+                row.insertCell().textContent = log.fmembername || '';
+                row.insertCell().textContent = log.fclassesname || '';
+                row.insertCell().textContent = log.fgoods || '';
+                row.insertCell().textContent = log.famount !== null && log.famount !== undefined ? log.famount : '';
+                row.insertCell().textContent = log.fbalance !== null && log.fbalance !== undefined ? log.fbalance : '';
+                row.insertCell().textContent = log.fmark || '';
+            });
+        }
+        
+        let memberFilterTimeout;
+        function applyMemberFilters() {
+            clearTimeout(memberFilterTimeout);
+            memberFilterTimeout = setTimeout(() => {
+                const currentFilters = {};
+                memberFilterInputs.forEach(input => {
+                    if (input.value) {
+                        currentFilters[input.dataset.column] = input.value;
+                    }
+                });
+                fetchMemberLogs(currentFilters);
+            }, 300); 
+        }
+
+        memberFilterInputs.forEach(input => {
+            input.addEventListener('input', applyMemberFilters);
+        });
+
+        fetchMemberLogs();
+    </script>
+</body>
+</html>
