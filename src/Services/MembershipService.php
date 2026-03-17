@@ -56,8 +56,11 @@ class MembershipService
             ];
         }
 
-        $searchSql = 'fnumber LIKE :keyword OR fname LIKE :keyword';
-        $params = [':keyword' => '%' . $keyword . '%'];
+        $searchSql = 'fnumber LIKE :keyword_number OR fname LIKE :keyword_name';
+        $params = [
+            ':keyword_number' => '%' . $keyword . '%',
+            ':keyword_name' => '%' . $keyword . '%',
+        ];
 
         if (ctype_digit($keyword)) {
             $searchSql = 'fid = :fid OR ' . $searchSql;
@@ -79,7 +82,8 @@ class MembershipService
              ORDER BY fid DESC
              LIMIT :limit OFFSET :offset'
         );
-        $stmt->bindValue(':keyword', '%' . $keyword . '%');
+        $stmt->bindValue(':keyword_number', '%' . $keyword . '%');
+        $stmt->bindValue(':keyword_name', '%' . $keyword . '%');
         if (ctype_digit($keyword)) {
             $stmt->bindValue(':fid', (int) $keyword, PDO::PARAM_INT);
         }
