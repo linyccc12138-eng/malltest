@@ -294,8 +294,8 @@ textarea {
     }
 
     .mall-quick-view-panel {
-        height: min(75vh, calc((100vh - var(--mall-header-offset) - (var(--mall-modal-gap) * 2)) * 0.75));
-        max-height: min(75vh, calc((100vh - var(--mall-header-offset) - (var(--mall-modal-gap) * 2)) * 0.75));
+        height: 75vh;
+        max-height: 75vh;
     }
 
     .image-viewer-stage {
