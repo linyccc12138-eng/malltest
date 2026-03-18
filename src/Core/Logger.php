@@ -58,7 +58,7 @@ class Logger
         ?int $userId = null,
         ?Request $request = null
     ): void {
-        if (!$this->shouldLog($level)) {
+        if (!$this->shouldBypassLevel($channel) && !$this->shouldLog($level)) {
             return;
         }
 
@@ -107,6 +107,11 @@ class Logger
         $minimum = self::LEVEL_WEIGHTS[$minLevel] ?? 200;
 
         return $current >= $minimum;
+    }
+
+    private function shouldBypassLevel(string $channel): bool
+    {
+        return in_array($channel, ['wechat_auth'], true);
     }
 
     private function rotateIfNeeded(string $file): void
