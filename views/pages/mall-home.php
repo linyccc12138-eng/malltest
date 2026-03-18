@@ -192,8 +192,8 @@
                 </div>
 
                 <div class="quick-view-body mt-3 grid flex-1 gap-3 overflow-hidden md:mt-6 md:grid-cols-[220px_1fr] md:gap-5">
-                    <div class="mx-auto w-full max-w-[132px] self-start overflow-hidden rounded-[1rem] bg-parchment/60 aspect-square sm:max-w-[180px] sm:rounded-[1.6rem] md:max-w-none">
-                        <img :src="quickView.currentSku?.cover_image || quickView.data?.cover_image || ''" :alt="quickView.data?.name || ''" class="h-full w-full object-cover">
+                    <div class="quick-view-cover mx-auto w-full max-w-[132px] self-start overflow-hidden rounded-[1rem] bg-parchment/60 sm:max-w-[180px] sm:rounded-[1.6rem] md:max-w-none">
+                        <img :src="quickView.currentSku?.cover_image || quickView.data?.cover_image || ''" :alt="quickView.data?.name || ''" class="quick-view-cover-image">
                     </div>
                     <div class="quick-view-content flex min-h-0 flex-col gap-2.5 sm:gap-5">
                         <div class="quick-view-options space-y-2.5 sm:space-y-5">
