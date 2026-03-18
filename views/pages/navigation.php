@@ -38,7 +38,7 @@ $courses = $navData['recommended_courses'] ?? [];
             </div>
             <div class="space-y-4">
                 <?php foreach ($activities as $activity): ?>
-                    <a href="/portal/activities/<?= (int) $activity['id'] ?>" class="flex items-center gap-3 rounded-[1.4rem] border border-bronze/10 bg-parchment/70 p-4 transition hover:border-bronze/20 hover:bg-parchment/85">
+                    <a href="/mall/activities/<?= (int) $activity['id'] ?>" class="flex items-center gap-3 rounded-[1.4rem] border border-bronze/10 bg-parchment/70 p-4 transition hover:border-bronze/20 hover:bg-parchment/85">
                         <div class="h-20 w-20 overflow-hidden rounded-[1.2rem] border border-bronze/10 bg-white">
                             <?php if (!empty($activity['thumbnail_image'])): ?>
                                 <img src="<?= htmlspecialchars($activity['thumbnail_image'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8') ?>" class="h-full w-full object-cover">
