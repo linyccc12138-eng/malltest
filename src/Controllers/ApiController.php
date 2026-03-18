@@ -303,6 +303,30 @@ class ApiController extends BaseController
         });
     }
 
+    public function wechatJsSdkConfig(Request $request, array $params = []): Response
+    {
+        return $this->respond(function () use ($request): array {
+            $url = trim((string) $request->input('url', ''));
+            if ($url === '') {
+                throw new \RuntimeException('缺少签名页面地址。');
+            }
+
+            $currentHost = (string) parse_url((string) $this->app->config()->get('app.url'), PHP_URL_HOST);
+            $requestHost = (string) parse_url($url, PHP_URL_HOST);
+            if ($currentHost !== '' && $requestHost !== '' && strcasecmp($currentHost, $requestHost) !== 0) {
+                throw new \RuntimeException('签名域名与当前站点不一致。');
+            }
+
+            return $this->wechat->buildJsSdkConfig($url, [
+                'updateAppMessageShareData',
+                'updateTimelineShareData',
+                'onMenuShareAppMessage',
+                'onMenuShareTimeline',
+                'showOptionMenu',
+            ]);
+        });
+    }
+
     public function wechatCallback(Request $request, array $params = []): Response
     {
         return $this->respond(function () use ($request): array {

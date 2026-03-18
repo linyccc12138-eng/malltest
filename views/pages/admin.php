@@ -44,7 +44,18 @@
             </div>
 
             <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-bronze/10 pt-4">
-                <div class="text-sm text-ink/55">共 <span x-text="productPager.total"></span> 个商品</div>
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="text-sm text-ink/55">共 <span x-text="productPager.total"></span> 个商品</div>
+                    <label class="flex items-center gap-2 text-sm text-ink/60">
+                        分类
+                        <select x-model="productFilters.category_id" @change="productPager = { ...productPager, page: 1 }; void loadProducts()" class="rounded-full border-bronze/15 bg-parchment/55 pr-8">
+                            <option value="">全部分类</option>
+                            <template x-for="item in productCategoryOptions" :key="`product-category-${item.id}`">
+                                <option :value="String(item.id)" x-text="categoryLabel(item)"></option>
+                            </template>
+                        </select>
+                    </label>
+                </div>
                 <label class="flex items-center gap-2 text-sm text-ink/60">
                     每页
                     <select x-model="productPager.page_size" @change="setPagerSize('productPager', productPager.page_size, 'loadProducts')" class="rounded-full border-bronze/15 bg-parchment/55 pr-8">

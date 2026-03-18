@@ -103,14 +103,10 @@
                         <div class="mt-2 flex items-stretch justify-between gap-2 sm:mt-3">
                             <div class="flex min-w-0 flex-1 flex-col justify-center">
                                 <div class="text-base font-semibold text-bronze sm:text-lg">￥<span x-text="formatMoney(item.price)"></span></div>
-                                <div class="text-[11px] text-ink/45 sm:text-xs" x-text="inventoryLabel(item)"></div>
+                                <div class="truncate whitespace-nowrap text-[11px] text-ink/45 sm:text-xs" x-text="inventoryLabel(item)"></div>
                             </div>
                             <button @click="openQuickView(item.id)" type="button" class="inline-flex min-h-[2.55rem] w-10 shrink-0 items-center justify-center rounded-full border border-bronze/18 bg-white text-bronze shadow-card transition hover:border-bronze hover:bg-bronze/5 sm:min-h-[3.25rem] sm:w-12" aria-label="加入购物车">
-                                <svg viewBox="0 0 24 24" class="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <circle cx="9" cy="19" r="1.6"></circle>
-                                    <circle cx="17" cy="19" r="1.6"></circle>
-                                    <path d="M3 4h2.2l2.4 10.2A1 1 0 0 0 8.58 15H17.8a1 1 0 0 0 .96-.73L21 7.2H7.1"></path>
-                                </svg>
+                                <img src="<?= asset('images/icon-cart.svg') ?>" alt="" class="h-4 w-4 sm:h-5 sm:w-5">
                             </button>
                         </div>
                     </article>
@@ -185,67 +181,69 @@
 
     <template x-teleport="body">
         <div x-show="quickView.open" x-cloak x-transition.opacity.duration.180ms class="modal-overlay" @click.self="quickView.open = false">
-            <div x-transition.scale.opacity.duration.220ms class="mall-quick-view-panel modal-panel w-full max-w-3xl overflow-hidden rounded-[1.5rem] border border-bronze/10 bg-white/95 p-4 shadow-glow sm:rounded-[2rem] sm:p-6">
+            <div x-transition.scale.opacity.duration.220ms class="mall-quick-view-panel modal-panel flex w-full max-w-3xl flex-col overflow-hidden rounded-[1.5rem] border border-bronze/10 bg-white/95 p-4 shadow-glow sm:rounded-[2rem] sm:p-6">
                 <div class="flex items-start justify-between gap-3 sm:gap-4">
-                    <div>
+                    <div class="min-w-0">
                         <div class="text-xs uppercase tracking-[0.28em] text-bronze/65 sm:text-sm sm:tracking-[0.3em]">加入购物车</div>
-                        <h3 class="mt-1.5 font-display text-2xl text-ink sm:mt-2 sm:text-3xl" x-text="quickView.data?.name || ''"></h3>
-                        <p class="mt-1.5 text-xs leading-6 text-ink/60 sm:mt-2 sm:text-sm sm:leading-7" x-text="quickView.data?.summary || ''"></p>
+                        <h3 class="mt-1 font-display text-xl text-ink sm:mt-2 sm:text-3xl" x-text="quickView.data?.name || ''"></h3>
+                        <p class="mt-1 line-clamp-2 text-[11px] leading-5 text-ink/60 sm:mt-2 sm:text-sm sm:leading-7" x-text="quickView.data?.summary || ''"></p>
                     </div>
-                    <button @click="quickView.open = false" type="button" class="rounded-full border border-bronze/20 px-3 py-1.5 text-xs text-bronze sm:px-3 sm:py-2 sm:text-sm">关闭</button>
+                    <button @click="quickView.open = false" type="button" class="shrink-0 rounded-full border border-bronze/20 px-3 py-1.5 text-xs text-bronze sm:px-3 sm:py-2 sm:text-sm">关闭</button>
                 </div>
 
-                <div class="mt-4 grid gap-4 md:mt-6 md:grid-cols-[220px_1fr] md:gap-5">
-                    <div class="mx-auto w-full max-w-[180px] overflow-hidden rounded-[1.3rem] bg-parchment/60 sm:max-w-none sm:rounded-[1.6rem]">
+                <div class="quick-view-body mt-3 grid flex-1 gap-3 overflow-hidden md:mt-6 md:grid-cols-[220px_1fr] md:gap-5">
+                    <div class="mx-auto w-full max-w-[132px] overflow-hidden rounded-[1rem] bg-parchment/60 sm:max-w-[180px] sm:rounded-[1.6rem] md:max-w-none">
                         <img :src="quickView.currentSku?.cover_image || quickView.data?.cover_image || ''" :alt="quickView.data?.name || ''" class="mall-square-media">
                     </div>
-                    <div class="space-y-3.5 sm:space-y-5">
-                        <template x-for="(options, name) in quickView.skuOptions" :key="name">
-                            <div>
-                                <div class="mb-1.5 text-xs font-medium text-ink sm:mb-2 sm:text-sm" x-text="name"></div>
-                                <div class="flex flex-wrap gap-1.5 sm:gap-2">
-                                    <template x-for="option in options" :key="option">
-                                        <button
-                                            @click="selectQuickViewOption(name, option)"
-                                            :class="quickView.selectedOptions[name] === option ? 'border-bronze bg-bronze text-white' : 'border-bronze/20 bg-parchment/55 text-ink'"
-                                            class="rounded-full border px-3 py-1.5 text-xs transition sm:px-4 sm:py-2 sm:text-sm"
-                                            x-text="option"
-                                        ></button>
-                                    </template>
+                    <div class="quick-view-content flex min-h-0 flex-col gap-2.5 sm:gap-5">
+                        <div class="quick-view-options space-y-2.5 sm:space-y-5">
+                            <template x-for="(options, name) in quickView.skuOptions" :key="name">
+                                <div>
+                                    <div class="mb-1 text-[11px] font-medium text-ink sm:mb-2 sm:text-sm" x-text="name"></div>
+                                    <div class="flex flex-wrap gap-1.5 sm:gap-2">
+                                        <template x-for="option in options" :key="option">
+                                            <button
+                                                @click="selectQuickViewOption(name, option)"
+                                                :class="quickView.selectedOptions[name] === option ? 'border-bronze bg-bronze text-white' : 'border-bronze/20 bg-parchment/55 text-ink'"
+                                                class="rounded-full border px-2.5 py-1 text-[11px] transition sm:px-4 sm:py-2 sm:text-sm"
+                                                x-text="option"
+                                            ></button>
+                                        </template>
+                                    </div>
                                 </div>
-                            </div>
-                        </template>
+                            </template>
+                        </div>
 
-                        <div class="grid gap-3 sm:grid-cols-2">
-                            <div class="rounded-[1.1rem] border border-bronze/10 bg-parchment/55 p-3 sm:rounded-[1.3rem] sm:p-4">
-                                <div class="text-xs text-ink/55 sm:text-sm">当前价格</div>
-                                <div class="mt-1.5 text-xl font-semibold text-bronze sm:mt-2 sm:text-2xl">￥<span x-text="formatMoney(quickViewPrice())"></span></div>
+                        <div class="grid grid-cols-2 gap-2 sm:gap-3">
+                            <div class="rounded-[0.95rem] border border-bronze/10 bg-parchment/55 p-2 sm:rounded-[1.3rem] sm:p-4">
+                                <div class="text-[10px] text-ink/55 sm:text-sm">当前价格</div>
+                                <div class="mt-1 text-base font-semibold text-bronze sm:mt-2 sm:text-2xl">￥<span x-text="formatMoney(quickViewPrice())"></span></div>
                             </div>
-                            <div class="rounded-[1.1rem] border border-bronze/10 bg-parchment/55 p-3 sm:rounded-[1.3rem] sm:p-4">
-                                <div class="text-xs text-ink/55 sm:text-sm">当前库存</div>
-                                <div class="mt-1.5 text-xl font-semibold text-ink sm:mt-2 sm:text-2xl" x-text="quickViewStock()"></div>
+                            <div class="rounded-[0.95rem] border border-bronze/10 bg-parchment/55 p-2 sm:rounded-[1.3rem] sm:p-4">
+                                <div class="text-[10px] text-ink/55 sm:text-sm">当前库存</div>
+                                <div class="mt-1 text-base font-semibold text-ink sm:mt-2 sm:text-2xl" x-text="quickViewStock()"></div>
                             </div>
                         </div>
 
-                        <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-                            <div class="rounded-[1.1rem] border border-bronze/10 bg-white/75 p-3 sm:rounded-[1.3rem] sm:p-4">
-                                <div class="text-xs text-ink/55 sm:text-sm">实时价格</div>
-                                <div class="mt-1.5 text-xl font-semibold text-bronze sm:mt-2 sm:text-2xl">￥<span x-text="formatMoney(quickViewLineTotal())"></span></div>
-                                <div x-show="quickViewShowsMemberPrice()" class="mt-1 text-xs text-sage sm:text-sm">
+                        <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-3">
+                            <div class="rounded-[0.95rem] border border-bronze/10 bg-white/75 p-2 sm:rounded-[1.3rem] sm:p-4">
+                                <div class="text-[10px] text-ink/55 sm:text-sm">实时价格</div>
+                                <div class="mt-1 text-base font-semibold text-bronze sm:mt-2 sm:text-2xl">￥<span x-text="formatMoney(quickViewLineTotal())"></span></div>
+                                <div x-show="quickViewShowsMemberPrice()" class="mt-1 text-[10px] text-sage sm:text-sm">
                                     会员折扣价 ￥<span x-text="formatMoney(quickViewMemberTotal())"></span>
                                 </div>
                             </div>
-                            <div class="flex items-center gap-1.5 rounded-[1.1rem] border border-bronze/10 bg-white/70 px-2 py-2 sm:gap-2 sm:rounded-[1.3rem] sm:px-3">
-                                <button @click="quickView.quantity = Math.max(1, Number(quickView.quantity) - 1)" type="button" class="h-8 w-8 rounded-full border border-bronze/20 text-sm sm:h-10 sm:w-10">-</button>
-                                <input x-model="quickView.quantity" type="number" min="1" class="w-12 rounded-full border-bronze/20 px-0 text-center text-sm sm:w-16">
-                                <button @click="quickView.quantity = Number(quickView.quantity) + 1" type="button" class="h-8 w-8 rounded-full border border-bronze/20 text-sm sm:h-10 sm:w-10">+</button>
+                            <div class="flex items-center gap-1 rounded-[0.95rem] border border-bronze/10 bg-white/70 px-2 py-2 sm:gap-2 sm:rounded-[1.3rem] sm:px-3">
+                                <button @click="quickView.quantity = Math.max(1, Number(quickView.quantity) - 1)" type="button" class="h-7 w-7 rounded-full border border-bronze/20 text-xs sm:h-10 sm:w-10 sm:text-sm">-</button>
+                                <input x-model="quickView.quantity" type="number" min="1" class="w-10 rounded-full border-bronze/20 px-0 text-center text-xs sm:w-16 sm:text-sm">
+                                <button @click="quickView.quantity = Number(quickView.quantity) + 1" type="button" class="h-7 w-7 rounded-full border border-bronze/20 text-xs sm:h-10 sm:w-10 sm:text-sm">+</button>
                             </div>
                         </div>
 
-                        <div class="flex flex-wrap gap-2.5 sm:gap-3">
-                            <button @click="addQuickViewToCart" type="button" class="rounded-full bg-bronze px-5 py-2.5 text-xs text-white shadow-card transition hover:bg-bronze/90 sm:px-6 sm:py-3 sm:text-sm">确认加入购物车</button>
-                            <button @click="buyNowFromQuickView" type="button" class="rounded-full bg-teal px-5 py-2.5 text-xs text-white shadow-card transition hover:bg-teal/90 sm:px-6 sm:py-3 sm:text-sm">立即购买</button>
-                            <a :href="quickView.data ? '/mall/products/' + quickView.data.id : '/mall'" class="rounded-full border border-bronze/20 px-5 py-2.5 text-xs text-bronze transition hover:border-bronze hover:bg-bronze/5 sm:px-6 sm:py-3 sm:text-sm">查看详情</a>
+                        <div class="mt-auto grid grid-cols-3 gap-1.5 sm:gap-3">
+                            <button @click="buyNowFromQuickView" type="button" class="inline-flex min-h-[2.1rem] items-center justify-center rounded-full bg-teal px-2 py-2 text-[11px] text-white shadow-card transition hover:bg-teal/90 sm:min-h-[3rem] sm:px-4 sm:text-sm">立即购买</button>
+                            <button @click="addQuickViewToCart" type="button" class="inline-flex min-h-[2.1rem] items-center justify-center rounded-full bg-bronze px-2 py-2 text-[11px] text-white shadow-card transition hover:bg-bronze/90 sm:min-h-[3rem] sm:px-4 sm:text-sm">加入购物车</button>
+                            <a :href="quickView.data ? '/mall/products/' + quickView.data.id : '/mall'" class="inline-flex min-h-[2.1rem] items-center justify-center rounded-full border border-bronze/20 px-2 py-2 text-[11px] text-bronze transition hover:border-bronze hover:bg-bronze/5 sm:min-h-[3rem] sm:px-4 sm:text-sm">查看详情</a>
                         </div>
                     </div>
                 </div>

@@ -37,7 +37,10 @@
                             </div>
                             <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                                 <div>
-                                    <div class="text-lg font-semibold text-bronze">¥<span x-text="formatMoney(item.final_price)"></span></div>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <div class="text-lg font-semibold text-bronze">¥<span x-text="formatMoney(item.final_price)"></span></div>
+                                        <div x-show="Number(item.final_price) < Number(item.unit_price)" class="text-sm text-ink/35 line-through">¥<span x-text="formatMoney(item.unit_price)"></span></div>
+                                    </div>
                                     <div class="mt-1 text-xs text-ink/45">库存 <span x-text="item.sku_stock"></span></div>
                                 </div>
                                 <div class="flex items-center gap-2">

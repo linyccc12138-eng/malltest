@@ -113,6 +113,7 @@ $router->post('/mall/api/orders/{id}/cancel', [$apiController, 'cancelOrder']);
 $router->post('/mall/api/orders/{id}/complete', [$apiController, 'completeOrder']);
 $router->get('/mall/api/wallet', [$apiController, 'wallet']);
 $router->get('/mall/api/wechat/bind-url', [$apiController, 'bindWechatUrl']);
+$router->get('/mall/api/wechat/jssdk-config', [$apiController, 'wechatJsSdkConfig']);
 $router->get('/mall/api/wechat/callback', [$apiController, 'wechatCallback']);
 $router->post('/mall/api/wechat/notify', [$apiController, 'wechatNotify']);
 

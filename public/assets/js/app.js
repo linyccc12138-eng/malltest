@@ -3,6 +3,7 @@
     const pageData = window.PAGE_DATA || {};
     const tinymceApiKey = 'esazkmyz3gahrj2teqtvimt91wlrracqp3k2ig8zuushd1n6';
     const tinymceScriptSrc = `https://cdn.tiny.cloud/1/${tinymceApiKey}/tinymce/7/tinymce.min.js`;
+    const wechatJssdkScriptSrc = 'https://res.wx.qq.com/open/js/jweixin-1.6.0.js';
 
     const getCsrfToken = () => bootstrap.csrfToken || '';
     const formatMoney = (value) => Number(value || 0).toFixed(2);
@@ -24,8 +25,24 @@
 
     const ensureTinyMce = () => loadScriptOnce(tinymceScriptSrc);
     const uniqueList = (items = []) => items.filter(Boolean).filter((item, index, array) => array.indexOf(item) === index);
+    const absoluteUrl = (value = '') => {
+        if (!value) {
+            return '';
+        }
+        try {
+            return new URL(value, window.location.origin).toString();
+        } catch (error) {
+            return value;
+        }
+    };
     const touchPointX = (event) => event.changedTouches?.[0]?.clientX ?? event.touches?.[0]?.clientX ?? 0;
     const touchPointY = (event) => event.changedTouches?.[0]?.clientY ?? event.touches?.[0]?.clientY ?? 0;
+    const inventoryText = (stock = 0, supportsMemberDiscount = 0) => {
+        const normalizedStock = Math.max(0, Number(stock || 0));
+        return Number(supportsMemberDiscount || 0) === 1
+            ? `库存 ${normalizedStock} / 会员折扣`
+            : `库存 ${normalizedStock}`;
+    };
     const memberDiscountRate = (member = bootstrap.currentMember || null) => {
         const raw = Number(member?.foff || 1);
         if (!Number.isFinite(raw) || raw <= 0) {
@@ -591,10 +608,7 @@
             filterWatchSuspended: false,
             categoryLabel: categoryOptionLabel,
             inventoryLabel(item = {}) {
-                const stock = Number(item.stock_total ?? 0);
-                return Number(item.support_member_discount || 0) === 1
-                    ? `库存 ${stock} · 会员折扣`
-                    : `库存 ${stock}`;
+                return inventoryText(item.stock_total ?? 0, item.support_member_discount);
             },
             init() {
                 ['keyword', 'brand', 'category_id', 'sort'].forEach((key) => {
@@ -742,15 +756,17 @@
             product: pageData.product || {},
             gallery: [],
             activeImage: '',
+            galleryDragOffset: 0,
             detailImages: [],
             quantity: 1,
             skuOptions: {},
             selectedOptions: {},
             currentSku: null,
             viewer: { open: false, images: [], index: 0 },
-            swipeStartX: 0,
-            swipeStartY: 0,
-            swipeTarget: '',
+            viewerDragOffset: 0,
+            swipe: { target: '', startX: 0, startY: 0, deltaX: 0, horizontal: false, locked: false },
+            tapSuppressUntil: 0,
+            share: { ready: false, supported: false, loading: false, configuredUrl: '', readyPromise: null },
             init() {
                 this.gallery = uniqueList([this.product.cover_image, ...(this.product.gallery || [])]);
                 this.activeImage = this.gallery[0] || '';
@@ -761,6 +777,9 @@
                 this.resolveSku();
                 this.$nextTick(() => {
                     this.syncDetailImages();
+                    if (this.isWechatClient()) {
+                        void this.ensureWechatShareReady().catch(() => {});
+                    }
                 });
             },
             galleryImages() {
@@ -768,11 +787,15 @@
             },
             selectGalleryImage(image) {
                 this.activeImage = image;
+                this.galleryDragOffset = 0;
             },
             activeGalleryIndex() {
                 const images = this.galleryImages();
                 const index = images.indexOf(this.activeImage);
                 return index >= 0 ? index : 0;
+            },
+            galleryTrackStyle() {
+                return this.trackTranslateStyle(this.activeGalleryIndex(), this.galleryDragOffset, this.swipe.target === 'gallery');
             },
             shiftGallery(step) {
                 const images = this.galleryImages();
@@ -782,8 +805,12 @@
 
                 const nextIndex = (this.activeGalleryIndex() + step + images.length) % images.length;
                 this.activeImage = images[nextIndex];
+                this.galleryDragOffset = 0;
             },
             openGalleryViewer() {
+                if (this.consumeTapSuppression()) {
+                    return;
+                }
                 this.openViewer(this.galleryImages(), this.activeGalleryIndex());
             },
             openViewer(images = [], index = 0) {
@@ -794,58 +821,126 @@
 
                 this.viewer.images = normalized;
                 this.viewer.index = Math.max(0, Math.min(index, normalized.length - 1));
+                this.viewerDragOffset = 0;
                 this.viewer.open = true;
                 document.body.style.overflow = 'hidden';
             },
             closeViewer() {
                 this.viewer.open = false;
+                this.viewerDragOffset = 0;
                 document.body.style.overflow = '';
             },
-            viewerCurrentImage() {
-                return this.viewer.images[this.viewer.index] || '';
+            viewerTrackStyle() {
+                return this.trackTranslateStyle(this.viewer.index, this.viewerDragOffset, this.swipe.target === 'viewer');
             },
             viewerPrev() {
                 if (this.viewer.images.length < 2) {
                     return;
                 }
                 this.viewer.index = (this.viewer.index - 1 + this.viewer.images.length) % this.viewer.images.length;
+                this.viewerDragOffset = 0;
             },
             viewerNext() {
                 if (this.viewer.images.length < 2) {
                     return;
                 }
                 this.viewer.index = (this.viewer.index + 1) % this.viewer.images.length;
+                this.viewerDragOffset = 0;
             },
             startSwipe(target, event) {
-                this.swipeTarget = target;
-                this.swipeStartX = touchPointX(event);
-                this.swipeStartY = touchPointY(event);
+                this.swipe = {
+                    target,
+                    startX: touchPointX(event),
+                    startY: touchPointY(event),
+                    deltaX: 0,
+                    horizontal: false,
+                    locked: false,
+                };
+            },
+            moveSwipe(target, event) {
+                if (this.swipe.target !== target) {
+                    return;
+                }
+
+                const deltaX = touchPointX(event) - this.swipe.startX;
+                const deltaY = touchPointY(event) - this.swipe.startY;
+                if (!this.swipe.locked) {
+                    if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < 8) {
+                        return;
+                    }
+                    this.swipe.locked = true;
+                    this.swipe.horizontal = Math.abs(deltaX) > Math.abs(deltaY);
+                }
+
+                if (!this.swipe.horizontal) {
+                    return;
+                }
+
+                if (event.cancelable) {
+                    event.preventDefault();
+                }
+
+                this.swipe.deltaX = deltaX;
+                this.setSwipeOffset(target, this.limitSwipeOffset(target, deltaX));
             },
             endSwipe(target, event) {
-                if (this.swipeTarget !== target) {
+                if (this.swipe.target !== target) {
                     return;
                 }
 
-                const deltaX = touchPointX(event) - this.swipeStartX;
-                const deltaY = touchPointY(event) - this.swipeStartY;
-                this.swipeTarget = '';
+                const deltaX = this.swipe.deltaX || (touchPointX(event) - this.swipe.startX);
+                const deltaY = touchPointY(event) - this.swipe.startY;
+                const threshold = Math.min(140, window.innerWidth * 0.18);
+                const shouldSwitch = this.swipe.horizontal
+                    && Math.abs(deltaX) > Math.abs(deltaY)
+                    && Math.abs(deltaX) >= threshold;
 
-                if (Math.abs(deltaX) < 40 || Math.abs(deltaX) <= Math.abs(deltaY)) {
-                    return;
+                if (shouldSwitch) {
+                    const step = deltaX < 0 ? 1 : -1;
+                    if (target === 'gallery') {
+                        this.shiftGallery(step);
+                    } else if (step > 0) {
+                        this.viewerNext();
+                    } else {
+                        this.viewerPrev();
+                    }
+                    this.tapSuppressUntil = Date.now() + 260;
                 }
 
-                const step = deltaX < 0 ? 1 : -1;
+                this.swipe = { target: '', startX: 0, startY: 0, deltaX: 0, horizontal: false, locked: false };
+                this.setSwipeOffset(target, 0);
+            },
+            cancelSwipe(target) {
+                if (this.swipe.target === target) {
+                    this.swipe = { target: '', startX: 0, startY: 0, deltaX: 0, horizontal: false, locked: false };
+                }
+                this.setSwipeOffset(target, 0);
+            },
+            setSwipeOffset(target, value) {
                 if (target === 'gallery') {
-                    this.shiftGallery(step);
+                    this.galleryDragOffset = value;
                     return;
                 }
-
-                if (step > 0) {
-                    this.viewerNext();
-                    return;
+                this.viewerDragOffset = value;
+            },
+            limitSwipeOffset(target, deltaX) {
+                const images = target === 'gallery' ? this.galleryImages() : this.viewer.images;
+                const currentIndex = target === 'gallery' ? this.activeGalleryIndex() : this.viewer.index;
+                if (images.length <= 1) {
+                    return deltaX / 4;
                 }
-
-                this.viewerPrev();
+                if ((currentIndex === 0 && deltaX > 0) || (currentIndex === images.length - 1 && deltaX < 0)) {
+                    return deltaX / 3;
+                }
+                return deltaX;
+            },
+            trackTranslateStyle(index, offset, isDragging = false) {
+                const translate = `translate3d(calc(${index * -100}% + ${offset}px), 0, 0)`;
+                const transition = isDragging ? 'none' : 'transform 320ms cubic-bezier(0.22, 1, 0.36, 1)';
+                return `transform: ${translate}; transition: ${transition};`;
+            },
+            consumeTapSuppression() {
+                return Date.now() < this.tapSuppressUntil;
             },
             syncDetailImages() {
                 const article = this.$root.querySelector('[data-product-detail-body]');
@@ -894,6 +989,9 @@
             get currentStock() {
                 return this.currentSku?.stock ?? this.product.stock_total ?? 0;
             },
+            currentInventoryLabel() {
+                return inventoryText(this.currentStock, this.product.support_member_discount);
+            },
             lineTotal() {
                 return this.currentPrice * Math.max(1, Number(this.quantity) || 1);
             },
@@ -904,6 +1002,106 @@
                 return this.showsMemberPrice()
                     ? this.lineTotal() * memberDiscountRate()
                     : this.lineTotal();
+            },
+            isWechatClient() {
+                return /MicroMessenger/i.test(window.navigator.userAgent || '');
+            },
+            buildWechatShareData() {
+                const link = window.location.href.split('#')[0];
+                const imgUrl = absoluteUrl(this.currentSku?.cover_image || this.product.cover_image || this.activeImage || this.galleryImages()[0] || '');
+                return {
+                    title: this.product.name || document.title,
+                    desc: this.product.summary || '',
+                    link,
+                    imgUrl,
+                };
+            },
+            async applyWechatShareData() {
+                const shareData = this.buildWechatShareData();
+                let applied = false;
+                ['updateAppMessageShareData', 'updateTimelineShareData', 'onMenuShareAppMessage', 'onMenuShareTimeline'].forEach((method) => {
+                    if (typeof window.wx?.[method] === 'function') {
+                        window.wx[method](shareData);
+                        applied = true;
+                    }
+                });
+
+                if (typeof window.wx?.showOptionMenu === 'function') {
+                    window.wx.showOptionMenu();
+                }
+
+                if (!applied) {
+                    throw new Error('当前微信版本暂不支持网页分享接口。');
+                }
+            },
+            async ensureWechatShareReady() {
+                if (!this.isWechatClient()) {
+                    throw new Error('请在微信客户端中使用分享功能。');
+                }
+
+                const currentUrl = window.location.href.split('#')[0];
+                if (this.share.ready && this.share.configuredUrl === currentUrl && window.wx) {
+                    return true;
+                }
+
+                if (this.share.readyPromise) {
+                    return this.share.readyPromise;
+                }
+
+                this.share.loading = true;
+                this.share.readyPromise = (async () => {
+                    await loadScriptOnce(wechatJssdkScriptSrc);
+                    if (!window.wx) {
+                        throw new Error('微信分享组件加载失败。');
+                    }
+
+                    const config = await apiRequest(`/mall/api/wechat/jssdk-config?${new URLSearchParams({ url: currentUrl }).toString()}`);
+                    await new Promise((resolve, reject) => {
+                        let settled = false;
+                        const finish = (callback) => {
+                            if (settled) {
+                                return;
+                            }
+                            settled = true;
+                            callback();
+                        };
+
+                        window.wx.config({
+                            debug: false,
+                            appId: config.appId,
+                            timestamp: config.timestamp,
+                            nonceStr: config.nonceStr,
+                            signature: config.signature,
+                            jsApiList: config.jsApiList || ['updateAppMessageShareData', 'updateTimelineShareData', 'onMenuShareAppMessage', 'onMenuShareTimeline', 'showOptionMenu'],
+                        });
+                        window.wx.ready(() => finish(resolve));
+                        window.wx.error(() => finish(() => reject(new Error('微信分享配置失败，请确认当前域名已配置到 JS 接口安全域名。'))));
+                    });
+
+                    this.share.ready = true;
+                    this.share.supported = true;
+                    this.share.configuredUrl = currentUrl;
+                    await this.applyWechatShareData();
+                    return true;
+                })().catch((error) => {
+                    this.share.ready = false;
+                    this.share.supported = false;
+                    throw error;
+                }).finally(() => {
+                    this.share.loading = false;
+                    this.share.readyPromise = null;
+                });
+
+                return this.share.readyPromise;
+            },
+            async shareProduct() {
+                try {
+                    await this.ensureWechatShareReady();
+                    await this.applyWechatShareData();
+                    notice('已准备好分享内容，请点击右上角菜单分享商品。');
+                } catch (error) {
+                    notice(error.message, 'error');
+                }
             },
             buyNow() {
                 if (!bootstrap.currentUser) {
@@ -1698,6 +1896,8 @@
             products: [],
             selectedProductIds: [],
             productPager: defaultPager(15),
+            productFilters: { category_id: '' },
+            productCategoryOptions: [],
             categoryTree: [],
             allCategories: [],
             categories: [],
@@ -1837,10 +2037,12 @@
                     const query = new URLSearchParams({
                         page: this.productPager.page,
                         page_size: this.productPager.page_size,
+                        category_id: this.productFilters.category_id,
                     }).toString();
                     const payload = await apiRequest(`/mall/api/admin/products?${query}`);
                     this.products = payload.data || [];
                     this.productPager = normalizePagerMeta(payload.meta, this.productPager.page_size);
+                    this.productCategoryOptions = flattenCategories(payload.filters?.categories || []);
                     this.selectedProductIds = this.selectedProductIds.filter((id) => this.products.some((item) => Number(item.id) === Number(id)));
                 } catch (error) {
                     notice(error.message, 'error');
