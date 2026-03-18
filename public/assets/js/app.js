@@ -23,6 +23,55 @@
         document.head.appendChild(script);
     });
 
+    const waitForWeixinBridge = () => new Promise((resolve) => {
+        if (window.WeixinJSBridge) {
+            resolve(window.WeixinJSBridge);
+            return;
+        }
+
+        const handleReady = () => {
+            document.removeEventListener('WeixinJSBridgeReady', handleReady);
+            resolve(window.WeixinJSBridge || null);
+        };
+
+        document.addEventListener('WeixinJSBridgeReady', handleReady, { once: true });
+        window.setTimeout(() => {
+            document.removeEventListener('WeixinJSBridgeReady', handleReady);
+            resolve(window.WeixinJSBridge || null);
+        }, 1200);
+    });
+
+    const invokeWechatShareBridge = async (shareData = {}) => {
+        const bridge = window.WeixinJSBridge || await waitForWeixinBridge();
+        if (!bridge || typeof bridge.invoke !== 'function') {
+            throw new Error('当前微信版本暂不支持快捷分享。');
+        }
+
+        return new Promise((resolve, reject) => {
+            bridge.invoke('sendAppMessage', {
+                appid: '',
+                img_url: shareData.imgUrl || '',
+                img_width: '120',
+                img_height: '120',
+                link: shareData.link || window.location.href.split('#')[0],
+                desc: shareData.desc || '',
+                title: shareData.title || document.title,
+                type: 'link',
+            }, (result = {}) => {
+                const errMsg = String(result.err_msg || '');
+                if (!errMsg || /send_app_msg:(ok|confirm)/i.test(errMsg)) {
+                    resolve(result);
+                    return;
+                }
+                if (/cancel/i.test(errMsg)) {
+                    reject(new Error('已取消分享。'));
+                    return;
+                }
+                reject(new Error('快捷分享未成功。'));
+            });
+        });
+    };
+
     const ensureTinyMce = () => loadScriptOnce(tinymceScriptSrc);
     const uniqueList = (items = []) => items.filter(Boolean).filter((item, index, array) => array.indexOf(item) === index);
     const absoluteUrl = (value = '') => {
@@ -1098,7 +1147,18 @@
                 try {
                     await this.ensureWechatShareReady();
                     await this.applyWechatShareData();
-                    notice('已准备好分享内容，请点击右上角菜单分享商品。');
+                    const shareData = this.buildWechatShareData();
+                    try {
+                        await invokeWechatShareBridge(shareData);
+                        notice('微信分享卡片已准备好。');
+                        return;
+                    } catch (bridgeError) {
+                        if (bridgeError.message === '已取消分享。') {
+                            notice(bridgeError.message, 'error');
+                            return;
+                        }
+                    }
+                    notice('微信分享卡片已准备好，请点击右上角发送给微信好友。');
                 } catch (error) {
                     notice(error.message, 'error');
                 }

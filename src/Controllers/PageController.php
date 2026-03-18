@@ -126,6 +126,15 @@ class PageController extends BaseController
 
         $user = $this->users->currentUser();
         $member = $user ? $this->membership->getMallUserMember((int) $user['id']) : null;
+        $appUrl = rtrim((string) $this->app->config()->get('app.url'), '/');
+        $shareImage = (string) ($product['cover_image'] ?? '');
+        if ($shareImage !== '' && !preg_match('#^https?://#i', $shareImage)) {
+            $shareImage = $appUrl . '/' . ltrim($shareImage, '/');
+        }
+        $shareDescription = trim((string) ($product['summary'] ?? ''));
+        if ($shareDescription === '') {
+            $shareDescription = trim((string) ($product['subtitle'] ?? ''));
+        }
 
         return $this->view('pages/product-detail', [
             'pageTitle' => $product['name'],
@@ -133,6 +142,13 @@ class PageController extends BaseController
             'currentUser' => $user,
             'currentMember' => $member,
             'product' => $product,
+            'shareMeta' => [
+                'title' => (string) $product['name'],
+                'description' => $shareDescription,
+                'image' => $shareImage,
+                'url' => $appUrl . '/mall/products/' . (int) $product['id'],
+                'type' => 'product',
+            ],
         ]);
     }
 

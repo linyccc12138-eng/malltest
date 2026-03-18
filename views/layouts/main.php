@@ -1,10 +1,36 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+    <?php
+    $shareMeta = is_array($shareMeta ?? null) ? $shareMeta : [];
+    $metaTitle = (string) ($shareMeta['title'] ?? ($pageTitle ?? $appName));
+    $metaDescription = trim((string) ($shareMeta['description'] ?? '奇妙集市微信网页商城，支持会员联动、余额支付、微信支付、用户中心与管理后台。'));
+    $metaUrl = (string) ($shareMeta['url'] ?? '');
+    $metaImage = (string) ($shareMeta['image'] ?? '');
+    $metaType = (string) ($shareMeta['type'] ?? 'website');
+    ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title><?= htmlspecialchars(($pageTitle ?? $appName) . ' - ' . $appName, ENT_QUOTES, 'UTF-8') ?></title>
-    <meta name="description" content="奇妙集市微信网页商城，支持会员联动、余额支付、微信支付、用户中心与管理后台。">
+    <meta name="description" content="<?= htmlspecialchars($metaDescription, ENT_QUOTES, 'UTF-8') ?>">
+    <?php if ($metaUrl !== ''): ?>
+        <link rel="canonical" href="<?= htmlspecialchars($metaUrl, ENT_QUOTES, 'UTF-8') ?>">
+        <meta property="og:url" content="<?= htmlspecialchars($metaUrl, ENT_QUOTES, 'UTF-8') ?>">
+    <?php endif; ?>
+    <meta property="og:site_name" content="<?= htmlspecialchars((string) $appName, ENT_QUOTES, 'UTF-8') ?>">
+    <meta property="og:type" content="<?= htmlspecialchars($metaType, ENT_QUOTES, 'UTF-8') ?>">
+    <meta property="og:title" content="<?= htmlspecialchars($metaTitle, ENT_QUOTES, 'UTF-8') ?>">
+    <meta property="og:description" content="<?= htmlspecialchars($metaDescription, ENT_QUOTES, 'UTF-8') ?>">
+    <?php if ($metaImage !== ''): ?>
+        <meta property="og:image" content="<?= htmlspecialchars($metaImage, ENT_QUOTES, 'UTF-8') ?>">
+        <meta property="og:image:secure_url" content="<?= htmlspecialchars($metaImage, ENT_QUOTES, 'UTF-8') ?>">
+    <?php endif; ?>
+    <meta name="twitter:card" content="<?= $metaImage !== '' ? 'summary_large_image' : 'summary' ?>">
+    <meta name="twitter:title" content="<?= htmlspecialchars($metaTitle, ENT_QUOTES, 'UTF-8') ?>">
+    <meta name="twitter:description" content="<?= htmlspecialchars($metaDescription, ENT_QUOTES, 'UTF-8') ?>">
+    <?php if ($metaImage !== ''): ?>
+        <meta name="twitter:image" content="<?= htmlspecialchars($metaImage, ENT_QUOTES, 'UTF-8') ?>">
+    <?php endif; ?>
     <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio"></script>
     <script>
         tailwind.config = {

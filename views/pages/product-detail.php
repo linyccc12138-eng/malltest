@@ -101,8 +101,8 @@
 
     <template x-teleport="body">
         <div x-show="viewer.open" x-cloak x-transition.opacity.duration.180ms class="image-viewer-overlay" @click.self="closeViewer()" @keydown.window.escape="closeViewer()">
-            <button @click="closeViewer()" type="button" class="image-viewer-close" aria-label="关闭图片预览">×</button>
-            <button x-show="viewer.images.length > 1" @click="viewerPrev()" type="button" class="image-viewer-nav image-viewer-nav-left" aria-label="上一张">‹</button>
+            <button @click.stop="closeViewer()" type="button" class="image-viewer-close" aria-label="关闭图片预览">×</button>
+            <button x-show="viewer.images.length > 1" @click.stop="viewerPrev()" type="button" class="image-viewer-nav image-viewer-nav-left" aria-label="上一张">‹</button>
             <div class="image-viewer-stage" @touchstart.passive="startSwipe('viewer', $event)" @touchmove="moveSwipe('viewer', $event)" @touchend.passive="endSwipe('viewer', $event)" @touchcancel="cancelSwipe('viewer')">
                 <div class="image-viewer-track" :style="viewerTrackStyle()">
                     <template x-for="(image, index) in viewer.images" :key="`${image}-${index}`">
@@ -112,7 +112,7 @@
                     </template>
                 </div>
             </div>
-            <button x-show="viewer.images.length > 1" @click="viewerNext()" type="button" class="image-viewer-nav image-viewer-nav-right" aria-label="下一张">›</button>
+            <button x-show="viewer.images.length > 1" @click.stop="viewerNext()" type="button" class="image-viewer-nav image-viewer-nav-right" aria-label="下一张">›</button>
             <div x-show="viewer.images.length > 1" class="image-viewer-counter">
                 <span x-text="viewer.index + 1"></span>
                 /

@@ -1,13 +1,13 @@
 <?php $homeData = $homeSections ?? []; ?>
 <script>window.PAGE_DATA = <?= json_encode_unicode(['home' => $homeData]) ?>;</script>
-<section x-data="mallHomePage()" class="space-y-8 animate-rise">
+<section x-data="mallHomePage()" class="space-y-4 animate-rise sm:space-y-8">
     <div class="grid gap-4 lg:grid-cols-[1.3fr_0.9fr] lg:auto-rows-fr">
         <div class="relative h-full overflow-hidden rounded-[2rem] border border-bronze/20 bg-white/75 p-4 shadow-glow backdrop-blur sm:p-5">
             <div class="absolute -right-16 top-0 h-28 w-28 rounded-full bg-rose/10 blur-3xl"></div>
             <div class="absolute left-4 top-4 h-16 w-16 rounded-full border border-bronze/10 bg-bronze/5"></div>
             <div class="relative ml-auto flex h-full max-w-2xl flex-col justify-center">
                 <p class="text-sm uppercase tracking-[0.35em] text-bronze/70">WeChat Mall</p>
-                <h1 class="mt-3 font-display text-3xl leading-tight text-ink sm:text-4xl">穆夏风格的会员联动商城，集中展示商品、课程与会员下单流程</h1>
+                <h1 class="mt-1.5 font-display text-3xl leading-tight text-ink sm:mt-3 sm:text-4xl">穆夏风格的会员联动商城，集中展示商品、课程与会员下单流程</h1>
             </div>
         </div>
 
@@ -20,7 +20,7 @@
         </div>
     </div>
 
-    <section id="catalog" class="space-y-4 lg:grid lg:grid-cols-[280px_1fr] lg:gap-6 lg:space-y-0">
+    <section id="catalog" class="space-y-2 sm:space-y-4 lg:grid lg:grid-cols-[280px_1fr] lg:gap-6 lg:space-y-0">
         <div
             x-show="!mobileFiltersOpen"
             class="flex items-center justify-between rounded-[1.5rem] border border-bronze/12 bg-white/80 px-4 py-3 shadow-card transition-all lg:hidden"
@@ -34,7 +34,7 @@
         <aside
             x-show="mobileFiltersOpen || window.innerWidth >= 1024"
             x-transition.opacity.duration.180ms
-            class="mt-4 space-y-4 rounded-[1.8rem] border border-bronze/15 bg-white/80 p-5 shadow-card lg:mt-0"
+            class="mt-2 space-y-4 rounded-[1.8rem] border border-bronze/15 bg-white/80 p-5 shadow-card sm:mt-4 lg:mt-0"
             x-cloak
         >
             <div>
@@ -192,8 +192,8 @@
                 </div>
 
                 <div class="quick-view-body mt-3 grid flex-1 gap-3 overflow-hidden md:mt-6 md:grid-cols-[220px_1fr] md:gap-5">
-                    <div class="mx-auto w-full max-w-[132px] overflow-hidden rounded-[1rem] bg-parchment/60 sm:max-w-[180px] sm:rounded-[1.6rem] md:max-w-none">
-                        <img :src="quickView.currentSku?.cover_image || quickView.data?.cover_image || ''" :alt="quickView.data?.name || ''" class="mall-square-media">
+                    <div class="mx-auto w-full max-w-[132px] self-start overflow-hidden rounded-[1rem] bg-parchment/60 aspect-square sm:max-w-[180px] sm:rounded-[1.6rem] md:max-w-none">
+                        <img :src="quickView.currentSku?.cover_image || quickView.data?.cover_image || ''" :alt="quickView.data?.name || ''" class="h-full w-full object-cover">
                     </div>
                     <div class="quick-view-content flex min-h-0 flex-col gap-2.5 sm:gap-5">
                         <div class="quick-view-options space-y-2.5 sm:space-y-5">

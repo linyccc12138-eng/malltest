@@ -216,6 +216,8 @@ textarea {
 }
 
 .image-viewer-stage {
+    position: relative;
+    z-index: 1;
     width: min(90vw, 960px);
     height: min(82vh, 820px);
     overflow: hidden;
@@ -241,6 +243,7 @@ textarea {
 .image-viewer-nav,
 .image-viewer-close {
     position: absolute;
+    z-index: 3;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -279,6 +282,7 @@ textarea {
 
 .image-viewer-counter {
     position: absolute;
+    z-index: 3;
     bottom: 1.25rem;
     left: 50%;
     transform: translateX(-50%);

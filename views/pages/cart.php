@@ -35,18 +35,22 @@
                                 </div>
                                 <button @click="remove(item.id)" class="rounded-full border border-rose/20 px-3 py-2 text-xs text-rose">删除</button>
                             </div>
-                            <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                                <div>
+                            <div class="mt-4 flex items-end justify-between gap-3">
+                                <div class="min-w-0 flex-1">
                                     <div class="flex flex-wrap items-center gap-2">
                                         <div class="text-lg font-semibold text-bronze">¥<span x-text="formatMoney(item.final_price)"></span></div>
                                         <div x-show="Number(item.final_price) < Number(item.unit_price)" class="text-sm text-ink/35 line-through">¥<span x-text="formatMoney(item.unit_price)"></span></div>
                                     </div>
                                     <div class="mt-1 text-xs text-ink/45">库存 <span x-text="item.sku_stock"></span></div>
+                                    <div class="mt-1 flex flex-wrap items-center gap-2">
+                                        <div class="text-sm font-semibold text-bronze">小计 ¥<span x-text="formatMoney(Number(item.final_price || 0) * Number(item.quantity || 0))"></span></div>
+                                        <div x-show="Number(item.final_price) < Number(item.unit_price)" class="text-xs text-ink/35 line-through">¥<span x-text="formatMoney(Number(item.unit_price || 0) * Number(item.quantity || 0))"></span></div>
+                                    </div>
                                 </div>
-                                <div class="flex items-center gap-2">
-                                    <button @click="changeQty(item, Math.max(1, Number(item.quantity) - 1))" class="h-10 w-10 rounded-full border border-bronze/15">-</button>
-                                    <input :value="item.quantity" @change="changeQty(item, Math.max(1, Number($event.target.value || item.quantity)))" type="number" min="1" class="w-16 rounded-full border-bronze/15 px-0 text-center">
-                                    <button @click="changeQty(item, Number(item.quantity) + 1)" class="h-10 w-10 rounded-full border border-bronze/15">+</button>
+                                <div class="flex shrink-0 items-center gap-1.5 sm:gap-2">
+                                    <button @click="item.quantity = Math.max(1, Number(item.quantity) - 1); changeQty(item, item.quantity)" class="h-10 w-10 rounded-full border border-bronze/15">-</button>
+                                    <input x-model.number="item.quantity" @input="item.quantity = Math.max(1, Number($event.target.value || 1))" @change="changeQty(item, item.quantity)" type="number" min="1" class="w-14 rounded-full border-bronze/15 px-0 text-center sm:w-16">
+                                    <button @click="item.quantity = Number(item.quantity) + 1; changeQty(item, item.quantity)" class="h-10 w-10 rounded-full border border-bronze/15">+</button>
                                 </div>
                             </div>
                         </div>
