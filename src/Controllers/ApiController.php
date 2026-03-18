@@ -211,14 +211,21 @@ class ApiController extends BaseController
         return $this->respond(function () use ($request): array {
             $this->validateCsrf($request);
             $user = $this->users->requireUser();
+            $mode = (string) $request->input('mode', 'cart');
             $selectedIds = $request->input('selected_item_ids', []);
             $selectedIds = is_array($selectedIds) ? $selectedIds : [];
 
-            return $this->orders->createOrderFromCart(
-                (int) $user['id'],
-                (int) $request->input('address_id', 0),
-                $selectedIds
-            );
+            if ($mode === 'buy_now') {
+                return $this->orders->createOrderFromBuyNow(
+                    (int) $user['id'],
+                    (int) $request->input('address_id', 0),
+                    (int) $request->input('product_id', 0),
+                    (int) $request->input('sku_id', 0),
+                    (int) $request->input('quantity', 1)
+                );
+            }
+
+            return $this->orders->createOrderFromCart((int) $user['id'], (int) $request->input('address_id', 0), $selectedIds);
         });
     }
 

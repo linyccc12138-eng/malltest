@@ -51,6 +51,28 @@ class PageController extends BaseController
         ]);
     }
 
+    public function activityDetail(Request $request, array $params = []): Response
+    {
+        $activityId = (int) ($params['id'] ?? 0);
+        $activity = $this->catalog->findActivityById($activityId);
+        if (!$activity) {
+            return Response::html('<h1>404</h1><p>活动不存在。</p>', 404);
+        }
+
+        $user = $this->users->currentUser();
+        $isAdmin = $user && (($user['role'] ?? '') === 'admin');
+        if ((int) ($activity['is_active'] ?? 0) !== 1 && !$isAdmin) {
+            return Response::html('<h1>404</h1><p>活动不存在。</p>', 404);
+        }
+
+        return $this->view('pages/activity-detail', [
+            'pageTitle' => $activity['title'],
+            'pageKey' => 'activityDetail',
+            'currentUser' => $user,
+            'activity' => $activity,
+        ]);
+    }
+
     public function login(Request $request, array $params = []): Response
     {
         if ($this->users->currentUser()) {
@@ -152,13 +174,26 @@ class PageController extends BaseController
             return $this->redirect('/mall/login');
         }
 
+        $userId = (int) $user['id'];
+        $mode = (string) $request->input('mode', 'cart');
+        $checkout = match ($mode) {
+            'buy_now' => $this->orders->previewCheckoutBuyNow(
+                $userId,
+                (int) $request->input('product_id', 0),
+                (int) $request->input('sku_id', 0),
+                (int) $request->input('quantity', 1)
+            ),
+            'repay' => $this->orders->previewCheckoutRepay($userId, (int) $request->input('order_id', 0)),
+            default => $this->orders->previewCheckoutFromCart($userId, $this->parseIdList($request->input('items', []))),
+        };
+
         return $this->view('pages/checkout', [
             'pageTitle' => '确认订单',
             'pageKey' => 'checkout',
             'currentUser' => $user,
-            'currentMember' => $this->membership->getMallUserMember((int) $user['id']),
-            'addresses' => $this->users->addresses((int) $user['id']),
-            'cart' => $this->orders->cart((int) $user['id']),
+            'currentMember' => $this->membership->getMallUserMember($userId),
+            'addresses' => $this->users->addresses($userId),
+            'checkout' => $checkout,
         ]);
     }
 
@@ -248,5 +283,19 @@ class PageController extends BaseController
             'currentUser' => $user,
             'activity' => $activity,
         ]);
+    }
+
+    private function parseIdList(mixed $value): array
+    {
+        if (is_array($value)) {
+            return array_values(array_filter(array_map('intval', $value), static fn (int $id): bool => $id > 0));
+        }
+
+        $raw = trim((string) $value);
+        if ($raw === '') {
+            return [];
+        }
+
+        return array_values(array_filter(array_map('intval', explode(',', $raw)), static fn (int $id): bool => $id > 0));
     }
 }

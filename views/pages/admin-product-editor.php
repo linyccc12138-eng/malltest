@@ -51,30 +51,6 @@ $editorData = [
                             </template>
                         </select>
                     </label>
-                    <label class="block text-sm text-ink/70">
-                        销售价
-                        <input x-model="productForm.price" type="number" step="0.01" min="0" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" required>
-                    </label>
-                    <label class="block text-sm text-ink/70">
-                        市场价
-                        <input x-model="productForm.market_price" type="number" step="0.01" min="0" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55">
-                    </label>
-                    <label class="block text-sm text-ink/70">
-                        总库存
-                        <input x-model="productForm.stock_total" type="number" min="0" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" required>
-                    </label>
-                    <label class="block text-sm text-ink/70">
-                        评分
-                        <input x-model="productForm.rating" type="number" min="0" max="5" step="0.1" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55">
-                    </label>
-                    <label class="block text-sm text-ink/70">
-                        销量
-                        <input x-model="productForm.sales_count" type="number" min="0" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55">
-                    </label>
-                    <label class="block text-sm text-ink/70 md:col-span-2">
-                        Quick View 文案
-                        <textarea x-model="productForm.quick_view_text" rows="3" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></textarea>
-                    </label>
                 </div>
 
                 <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -161,7 +137,7 @@ $editorData = [
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h2 class="font-display text-2xl text-ink">规格设置</h2>
-                    <p class="mt-2 text-sm leading-7 text-ink/60">可为商品配置多个规格，前台下单时会按所选规格价格和库存计算。</p>
+                    <p class="mt-2 text-sm leading-7 text-ink/60">可为商品配置多个规格，前台下单时会按所选规格价格和库存计算；商品列表默认展示第一个规格的价格和库存。</p>
                 </div>
                 <button @click="addSkuRow()" type="button" class="rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">新增规格</button>
             </div>

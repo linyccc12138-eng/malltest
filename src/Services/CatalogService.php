@@ -83,8 +83,8 @@ class CatalogService
 
         $sortMap = [
             'sales' => 'p.sales_count DESC, p.id DESC',
-            'price_asc' => 'p.price ASC, p.id DESC',
-            'price_desc' => 'p.price DESC, p.id DESC',
+            'price_asc' => 'display_price ASC, p.id DESC',
+            'price_desc' => 'display_price DESC, p.id DESC',
             'newest' => 'p.created_at DESC, p.id DESC',
         ];
         $sort = $sortMap[$filters['sort'] ?? 'newest'] ?? $sortMap['newest'];
@@ -103,7 +103,9 @@ class CatalogService
         $total = (int) (($countStmt->fetch()['total'] ?? 0));
 
         $sql =
-            'SELECT p.*, c.name AS category_name
+            'SELECT p.*, c.name AS category_name,
+                    COALESCE((SELECT ps.price FROM product_skus ps WHERE ps.product_id = p.id ORDER BY ps.id ASC LIMIT 1), p.price) AS display_price,
+                    COALESCE((SELECT ps.stock FROM product_skus ps WHERE ps.product_id = p.id ORDER BY ps.id ASC LIMIT 1), p.stock_total) AS display_stock
              FROM products p
              LEFT JOIN categories c ON c.id = p.category_id
              WHERE ' . $whereSql .
@@ -178,9 +180,9 @@ class CatalogService
             'gallery' => $product['gallery'],
             'price' => $product['price'],
             'market_price' => $product['market_price'],
-            'quick_view_text' => $product['quick_view_text'],
             'skus' => $product['skus'],
             'stock_total' => $product['stock_total'],
+            'support_member_discount' => $product['support_member_discount'],
         ];
     }
 
@@ -270,6 +272,7 @@ class CatalogService
         $pdo->beginTransaction();
 
         try {
+            $existingProduct = $productId ? $this->findProductById($productId) : null;
             $skus = is_array($data['skus'] ?? null) ? $data['skus'] : [];
             $stockTotal = 0;
             foreach ($skus as $sku) {
@@ -278,6 +281,7 @@ class CatalogService
             if ($stockTotal === 0) {
                 $stockTotal = (int) ($data['stock_total'] ?? 0);
             }
+            $primaryPrice = round((float) (($skus[0]['price'] ?? $data['price'] ?? $existingProduct['price'] ?? 0)), 2);
 
             $summary = trim((string) ($data['summary'] ?? $data['subtitle'] ?? ''));
             $subtitle = trim((string) ($data['subtitle'] ?? $summary));
@@ -289,17 +293,17 @@ class CatalogService
                 ':summary' => $summary,
                 ':subtitle' => $subtitle,
                 ':brand' => trim((string) ($data['brand'] ?? '')),
-                ':price' => round((float) ($data['price'] ?? 0), 2),
-                ':market_price' => round((float) ($data['market_price'] ?? 0), 2),
-                ':rating' => round((float) ($data['rating'] ?? 4.8), 1),
-                ':sales_count' => (int) ($data['sales_count'] ?? 0),
+                ':price' => $primaryPrice,
+                ':market_price' => round((float) ($data['market_price'] ?? $existingProduct['market_price'] ?? $primaryPrice), 2),
+                ':rating' => round((float) ($data['rating'] ?? $existingProduct['rating'] ?? 4.8), 1),
+                ':sales_count' => (int) ($data['sales_count'] ?? $existingProduct['sales_count'] ?? 0),
                 ':stock_total' => $stockTotal,
                 ':is_on_sale' => !empty($data['is_on_sale']) ? 1 : 0,
                 ':support_member_discount' => !empty($data['support_member_discount']) ? 1 : 0,
                 ':is_course' => !empty($data['is_course']) ? 1 : 0,
                 ':is_recommended_course' => !empty($data['is_recommended_course']) ? 1 : 0,
                 ':is_new_arrival' => !empty($data['is_new_arrival']) ? 1 : 0,
-                ':quick_view_text' => trim((string) ($data['quick_view_text'] ?? '')),
+                ':quick_view_text' => trim((string) ($data['quick_view_text'] ?? $existingProduct['quick_view_text'] ?? '')),
                 ':cover_image' => trim((string) ($data['cover_image'] ?? '')),
                 ':gallery_json' => json_encode_unicode($data['gallery'] ?? []),
                 ':detail_html' => $this->sanitizer->clean((string) ($data['detail_html'] ?? '')),
@@ -461,11 +465,15 @@ class CatalogService
             return [];
         }
 
-        $sql = 'SELECT * FROM products WHERE ' . $flag . ' = 1 AND is_on_sale = 1';
+        $sql = 'SELECT p.*,
+                       COALESCE((SELECT ps.price FROM product_skus ps WHERE ps.product_id = p.id ORDER BY ps.id ASC LIMIT 1), p.price) AS display_price,
+                       COALESCE((SELECT ps.stock FROM product_skus ps WHERE ps.product_id = p.id ORDER BY ps.id ASC LIMIT 1), p.stock_total) AS display_stock
+                FROM products p
+                WHERE ' . $flag . ' = 1 AND is_on_sale = 1';
         if ($isCourse) {
-            $sql .= ' AND is_course = 1';
+            $sql .= ' AND p.is_course = 1';
         }
-        $sql .= ' ORDER BY created_at DESC LIMIT 6';
+        $sql .= ' ORDER BY p.created_at DESC LIMIT 6';
         $stmt = $this->db->mall()->query($sql);
         $items = [];
         foreach ($stmt->fetchAll() as $row) {
@@ -483,10 +491,10 @@ class CatalogService
         if ($product['summary'] === '') {
             $product['summary'] = trim((string) ($row['subtitle'] ?? ''));
         }
-        $product['price'] = (float) ($row['price'] ?? 0);
+        $product['price'] = (float) ($row['display_price'] ?? $row['price'] ?? 0);
         $product['market_price'] = (float) ($row['market_price'] ?? 0);
         $product['rating'] = (float) ($row['rating'] ?? 0);
-        $product['stock_total'] = (int) ($row['stock_total'] ?? 0);
+        $product['stock_total'] = (int) ($row['display_stock'] ?? $row['stock_total'] ?? 0);
         $product['is_on_sale'] = (int) ($row['is_on_sale'] ?? 0);
         $product['support_member_discount'] = (int) ($row['support_member_discount'] ?? 0);
         $product['is_course'] = (int) ($row['is_course'] ?? 0);
@@ -507,6 +515,10 @@ class CatalogService
                 $sku['stock'] = (int) ($sku['stock'] ?? 0);
                 return $sku;
             }, $stmt->fetchAll());
+            if ($product['skus'] !== []) {
+                $product['price'] = (float) ($product['skus'][0]['price'] ?? $product['price']);
+                $product['stock_total'] = (int) ($product['skus'][0]['stock'] ?? $product['stock_total']);
+            }
         } else {
             $product['skus'] = [];
         }

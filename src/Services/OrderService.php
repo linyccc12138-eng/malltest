@@ -23,7 +23,7 @@ class OrderService
     ) {
     }
 
-    public function cart(int $userId): array
+    public function cart(int $userId, array $selectedItemIds = []): array
     {
         $this->closeExpiredOrders();
         $cartId = $this->getOrCreateCartId($userId);
@@ -65,6 +65,23 @@ class OrderService
             }
         }
         unset($item);
+
+        if ($selectedItemIds !== []) {
+            $selectedMap = array_map('intval', $selectedItemIds);
+            $items = array_values(array_filter($items, static fn (array $item): bool => in_array((int) $item['id'], $selectedMap, true)));
+            $summary = [
+                'subtotal' => 0.0,
+                'discount' => 0.0,
+                'payable' => 0.0,
+            ];
+            foreach ($items as $item) {
+                if (($item['item_status'] ?? '') !== 'valid') {
+                    continue;
+                }
+                $summary['subtotal'] += (float) $item['unit_price'] * (int) $item['quantity'];
+                $summary['payable'] += (float) $item['final_price'] * (int) $item['quantity'];
+            }
+        }
 
         $summary['discount'] = round($summary['subtotal'] - $summary['payable'], 2);
         $summary['subtotal'] = round($summary['subtotal'], 2);
@@ -205,145 +222,105 @@ class OrderService
         $stmt = $this->db->mall()->prepare('DELETE FROM cart_items WHERE id = :id AND cart_id = :cart_id');
         $stmt->execute([':id' => $itemId, ':cart_id' => $cartId]);
     }
+
+    public function previewCheckoutFromCart(int $userId, array $selectedItemIds = []): array
+    {
+        $cart = $this->cart($userId, $selectedItemIds);
+        $normalizedSelectedIds = $selectedItemIds !== []
+            ? array_values(array_map('intval', $selectedItemIds))
+            : array_map(static fn (array $item): int => (int) $item['id'], $cart['items']);
+
+        return [
+            'mode' => 'cart',
+            'items' => $cart['items'],
+            'summary' => $cart['summary'],
+            'selected_item_ids' => $normalizedSelectedIds,
+        ];
+    }
+
+    public function previewCheckoutBuyNow(int $userId, int $productId, int $skuId, int $quantity): array
+    {
+        $item = $this->buildBuyNowItem($userId, $productId, $skuId, $quantity);
+
+        return [
+            'mode' => 'buy_now',
+            'items' => [$item],
+            'summary' => $this->summaryFromItems([$item]),
+            'buy_now' => [
+                'product_id' => (int) $item['product_id'],
+                'sku_id' => (int) $item['sku_id'],
+                'quantity' => (int) $item['quantity'],
+            ],
+        ];
+    }
+
+    public function previewCheckoutRepay(int $userId, int $orderId): array
+    {
+        $this->closeExpiredOrders();
+        $order = $this->findOrder($orderId, $userId, true);
+        if (!$order || $order['status'] !== 'pending_payment') {
+            throw new \RuntimeException('该订单当前不可继续付款。');
+        }
+
+        $items = array_map(static function (array $item): array {
+            return [
+                'id' => (int) $item['id'],
+                'product_id' => (int) $item['product_id'],
+                'sku_id' => (int) $item['sku_id'],
+                'product_name' => $item['product_name'],
+                'quantity' => (int) $item['quantity'],
+                'unit_price' => (float) $item['unit_price'],
+                'final_price' => (float) $item['final_unit_price'],
+                'cover_image' => $item['cover_image'],
+                'attributes' => $item['attributes'] ?? [],
+                'sku_name' => $item['sku_name'] ?? '',
+                'item_status' => 'valid',
+                'support_member_discount' => 0,
+            ];
+        }, $order['items'] ?? []);
+
+        return [
+            'mode' => 'repay',
+            'order_id' => (int) $order['id'],
+            'order_no' => $order['order_no'],
+            'placed_at' => $order['placed_at'] ?? '',
+            'items' => $items,
+            'summary' => [
+                'subtotal' => (float) $order['subtotal_amount'],
+                'discount' => (float) $order['discount_amount'],
+                'payable' => (float) $order['payable_amount'],
+            ],
+            'address_snapshot' => $order['address_snapshot'] ?? [],
+        ];
+    }
+
     public function createOrderFromCart(int $userId, int $addressId, array $selectedItemIds = []): array
     {
         $this->closeExpiredOrders();
-        $user = $this->users->findUser($userId);
-        if (!$user) {
-            throw new \RuntimeException('用户不存在。');
-        }
-
         $address = $this->users->findAddress($userId, $addressId);
         if (!$address) {
             throw new \RuntimeException('请选择有效的收货地址。');
         }
 
-        $cart = $this->cart($userId);
-        $items = $cart['items'];
-        if ($selectedItemIds !== []) {
-            $selectedMap = array_map('intval', $selectedItemIds);
-            $items = array_values(array_filter($items, static fn (array $item): bool => in_array((int) $item['id'], $selectedMap, true)));
-        }
-
-        $validItems = array_values(array_filter($items, static fn (array $item): bool => $item['item_status'] === 'valid'));
+        $cart = $this->cart($userId, $selectedItemIds);
+        $validItems = array_values(array_filter($cart['items'], static fn (array $item): bool => ($item['item_status'] ?? '') === 'valid'));
         if ($validItems === []) {
             throw new \RuntimeException('购物车中没有可下单商品。');
         }
 
-        $discountRate = $this->membership->getDiscountRateByMallUser($userId);
-        $memberSnapshot = $this->membership->getMallUserMember($userId);
-        $pdo = $this->db->mall();
-        $pdo->beginTransaction();
+        return $this->createOrderFromPreparedItems($userId, $address, $validItems, true);
+    }
 
-        try {
-            $subtotal = 0.0;
-            $payable = 0.0;
-            $orderNo = $this->generateOrderNo();
-            $expiresAt = (new DateTimeImmutable('+15 minutes'))->format('Y-m-d H:i:s');
-            $lockedItems = [];
-
-            foreach ($validItems as $item) {
-                $locked = $this->fetchProductSkuForUpdate($pdo, (int) $item['product_id'], (int) $item['sku_id']);
-                if (!$locked || (int) $locked['is_on_sale'] !== 1) {
-                    throw new \RuntimeException('下单时检测到商品已下架，请刷新后重试。');
-                }
-
-                $stock = (int) ($locked['sku_stock'] ?? $locked['stock_total']);
-                if ($stock < (int) $item['quantity']) {
-                    throw new \RuntimeException('下单时检测到库存变化，请刷新后重试。');
-                }
-
-                $lockedItems[] = $locked;
-            }
-
-            foreach ($validItems as $index => $item) {
-                $locked = $lockedItems[$index];
-                $unitPrice = (float) ($locked['sku_price'] ?? $locked['price']);
-                $finalUnitPrice = (int) $locked['support_member_discount'] === 1 ? round($unitPrice * $discountRate, 2) : $unitPrice;
-                $subtotal += $unitPrice * (int) $item['quantity'];
-                $payable += $finalUnitPrice * (int) $item['quantity'];
-            }
-
-            $orderStmt = $pdo->prepare(
-                'INSERT INTO orders (order_no, user_id, address_snapshot_json, status, payment_status, payment_method,
-                    subtotal_amount, discount_amount, payable_amount, paid_amount, member_discount_rate, membership_snapshot_json,
-                    placed_at, expires_at, created_at, updated_at)
-                 VALUES (:order_no, :user_id, :address_snapshot_json, :status, :payment_status, :payment_method,
-                    :subtotal_amount, :discount_amount, :payable_amount, :paid_amount, :member_discount_rate, :membership_snapshot_json,
-                    :placed_at, :expires_at, :created_at, :updated_at)'
-            );
-            $orderStmt->execute([
-                ':order_no' => $orderNo,
-                ':user_id' => $userId,
-                ':address_snapshot_json' => json_encode_unicode($address),
-                ':status' => 'pending_payment',
-                ':payment_status' => 'unpaid',
-                ':payment_method' => 'unselected',
-                ':subtotal_amount' => round($subtotal, 2),
-                ':discount_amount' => round($subtotal - $payable, 2),
-                ':payable_amount' => round($payable, 2),
-                ':paid_amount' => 0,
-                ':member_discount_rate' => $discountRate,
-                ':membership_snapshot_json' => json_encode_unicode($memberSnapshot ?: []),
-                ':placed_at' => now(),
-                ':expires_at' => $expiresAt,
-                ':created_at' => now(),
-                ':updated_at' => now(),
-            ]);
-            $orderId = (int) $pdo->lastInsertId();
-
-            $itemStmt = $pdo->prepare(
-                'INSERT INTO order_items (order_id, product_id, sku_id, product_name, sku_name, quantity, unit_price, final_unit_price,
-                    line_total, support_member_discount, cover_image, attribute_snapshot_json, created_at, updated_at)
-                 VALUES (:order_id, :product_id, :sku_id, :product_name, :sku_name, :quantity, :unit_price, :final_unit_price,
-                    :line_total, :support_member_discount, :cover_image, :attribute_snapshot_json, :created_at, :updated_at)'
-            );
-            $updateSkuStmt = $pdo->prepare('UPDATE product_skus SET stock = stock - :quantity, updated_at = :updated_at WHERE id = :sku_id');
-            $updateProductStmt = $pdo->prepare('UPDATE products SET stock_total = stock_total - :quantity, updated_at = :updated_at WHERE id = :product_id');
-            $deleteCartStmt = $pdo->prepare('DELETE FROM cart_items WHERE id = :id');
-
-            foreach ($validItems as $index => $item) {
-                $locked = $lockedItems[$index];
-                $attributes = json_decode((string) ($locked['attribute_json'] ?? '[]'), true) ?: [];
-                $unitPrice = (float) ($locked['sku_price'] ?? $locked['price']);
-                $finalUnitPrice = (int) $locked['support_member_discount'] === 1 ? round($unitPrice * $discountRate, 2) : $unitPrice;
-                $quantity = (int) $item['quantity'];
-
-                $itemStmt->execute([
-                    ':order_id' => $orderId,
-                    ':product_id' => (int) $item['product_id'],
-                    ':sku_id' => (int) $item['sku_id'],
-                    ':product_name' => $locked['name'],
-                    ':sku_name' => implode(' / ', array_values($attributes)),
-                    ':quantity' => $quantity,
-                    ':unit_price' => $unitPrice,
-                    ':final_unit_price' => $finalUnitPrice,
-                    ':line_total' => round($finalUnitPrice * $quantity, 2),
-                    ':support_member_discount' => (int) $locked['support_member_discount'],
-                    ':cover_image' => $locked['sku_cover_image'] ?: $locked['cover_image'],
-                    ':attribute_snapshot_json' => json_encode_unicode($attributes),
-                    ':created_at' => now(),
-                    ':updated_at' => now(),
-                ]);
-
-                $updateSkuStmt->execute([':quantity' => $quantity, ':updated_at' => now(), ':sku_id' => (int) $item['sku_id']]);
-                $updateProductStmt->execute([':quantity' => $quantity, ':updated_at' => now(), ':product_id' => (int) $item['product_id']]);
-                $deleteCartStmt->execute([':id' => (int) $item['id']]);
-            }
-
-            $pdo->commit();
-            $this->setOrderExpireKey($orderNo, $orderId);
-
-            $order = $this->findOrder($orderId, $userId, true);
-            if ($order && $this->notifications) {
-                $this->notifications->notifyUser('created', $order, $user);
-            }
-
-            return $order ?? [];
-        } catch (\Throwable $throwable) {
-            $pdo->rollBack();
-            throw $throwable;
+    public function createOrderFromBuyNow(int $userId, int $addressId, int $productId, int $skuId, int $quantity): array
+    {
+        $this->closeExpiredOrders();
+        $address = $this->users->findAddress($userId, $addressId);
+        if (!$address) {
+            throw new \RuntimeException('请选择有效的收货地址。');
         }
+
+        $item = $this->buildBuyNowItem($userId, $productId, $skuId, $quantity);
+        return $this->createOrderFromPreparedItems($userId, $address, [$item], false);
     }
 
     public function payWithBalance(int $userId, int $orderId): array
@@ -368,7 +345,7 @@ class OrderService
         $memberPaid = false;
 
         try {
-            $member = $this->membership->consumeForOrder($memberId, $goodsNames, $amount, '电商网站自助下单');
+            $member = $this->membership->consumeForOrder($memberId, $goodsNames, $amount, '电商网站自助下单：' . $order['order_no']);
             $memberPaid = true;
 
             $pdo = $this->db->mall();
@@ -569,6 +546,202 @@ class OrderService
         );
         $stmt->execute([':user_id' => $userId]);
         return $stmt->fetchAll();
+    }
+
+    private function buildBuyNowItem(int $userId, int $productId, int $skuId, int $quantity): array
+    {
+        $quantity = max(1, $quantity);
+        $product = $this->fetchProductSku($productId, $skuId);
+        if (!$product || (int) $product['is_on_sale'] !== 1) {
+            throw new \RuntimeException('商品已下架或不可购买。');
+        }
+
+        $stock = (int) ($product['sku_stock'] ?? $product['stock_total'] ?? 0);
+        if ($stock < $quantity) {
+            throw new \RuntimeException('库存不足。');
+        }
+
+        $discountRate = (int) ($product['support_member_discount'] ?? 0) === 1
+            ? $this->membership->getDiscountRateByMallUser($userId)
+            : 1.0;
+        $attributes = json_decode((string) ($product['attribute_json'] ?? '[]'), true) ?: [];
+        $unitPrice = (float) ($product['sku_price'] ?? $product['price'] ?? 0);
+
+        return [
+            'id' => 0,
+            'product_id' => (int) $productId,
+            'sku_id' => (int) ($product['sku_id'] ?? $skuId),
+            'quantity' => $quantity,
+            'unit_price' => $unitPrice,
+            'final_price' => round($unitPrice * $discountRate, 2),
+            'member_discount_rate' => $discountRate,
+            'item_status' => 'valid',
+            'product_name' => (string) ($product['name'] ?? ''),
+            'cover_image' => (string) (($product['sku_cover_image'] ?: $product['cover_image']) ?? ''),
+            'attributes' => $attributes,
+            'sku_stock' => $stock,
+            'support_member_discount' => (int) ($product['support_member_discount'] ?? 0),
+        ];
+    }
+
+    private function summaryFromItems(array $items): array
+    {
+        $summary = [
+            'subtotal' => 0.0,
+            'discount' => 0.0,
+            'payable' => 0.0,
+        ];
+
+        foreach ($items as $item) {
+            if (($item['item_status'] ?? 'valid') !== 'valid') {
+                continue;
+            }
+            $summary['subtotal'] += (float) ($item['unit_price'] ?? 0) * (int) ($item['quantity'] ?? 0);
+            $summary['payable'] += (float) ($item['final_price'] ?? 0) * (int) ($item['quantity'] ?? 0);
+        }
+
+        $summary['subtotal'] = round($summary['subtotal'], 2);
+        $summary['payable'] = round($summary['payable'], 2);
+        $summary['discount'] = round($summary['subtotal'] - $summary['payable'], 2);
+
+        return $summary;
+    }
+
+    private function createOrderFromPreparedItems(int $userId, array $address, array $items, bool $removeCartItems): array
+    {
+        $user = $this->users->findUser($userId);
+        if (!$user) {
+            throw new \RuntimeException('用户不存在。');
+        }
+
+        $discountRate = $this->membership->getDiscountRateByMallUser($userId);
+        $memberSnapshot = $this->membership->getMallUserMember($userId);
+        $pdo = $this->db->mall();
+        $pdo->beginTransaction();
+
+        try {
+            $subtotal = 0.0;
+            $payable = 0.0;
+            $orderNo = $this->generateOrderNo();
+            $expiresAt = (new DateTimeImmutable('+15 minutes'))->format('Y-m-d H:i:s');
+            $lockedItems = [];
+
+            foreach ($items as $item) {
+                $locked = $this->fetchProductSkuForUpdate($pdo, (int) ($item['product_id'] ?? 0), (int) ($item['sku_id'] ?? 0));
+                if (!$locked || (int) $locked['is_on_sale'] !== 1) {
+                    throw new \RuntimeException('下单时检测到商品已下架，请刷新后重试。');
+                }
+
+                $stock = (int) ($locked['sku_stock'] ?? $locked['stock_total'] ?? 0);
+                if ($stock < (int) ($item['quantity'] ?? 0)) {
+                    throw new \RuntimeException('下单时检测到库存变化，请刷新后重试。');
+                }
+
+                $lockedItems[] = $locked;
+            }
+
+            foreach ($items as $index => $item) {
+                $locked = $lockedItems[$index];
+                $unitPrice = (float) ($locked['sku_price'] ?? $locked['price']);
+                $finalUnitPrice = (int) $locked['support_member_discount'] === 1
+                    ? round($unitPrice * $discountRate, 2)
+                    : $unitPrice;
+                $quantity = (int) ($item['quantity'] ?? 0);
+
+                $subtotal += $unitPrice * $quantity;
+                $payable += $finalUnitPrice * $quantity;
+            }
+
+            $orderStmt = $pdo->prepare(
+                'INSERT INTO orders (order_no, user_id, address_snapshot_json, status, payment_status, payment_method,
+                    subtotal_amount, discount_amount, payable_amount, paid_amount, member_discount_rate, membership_snapshot_json,
+                    placed_at, expires_at, created_at, updated_at)
+                 VALUES (:order_no, :user_id, :address_snapshot_json, :status, :payment_status, :payment_method,
+                    :subtotal_amount, :discount_amount, :payable_amount, :paid_amount, :member_discount_rate, :membership_snapshot_json,
+                    :placed_at, :expires_at, :created_at, :updated_at)'
+            );
+            $orderStmt->execute([
+                ':order_no' => $orderNo,
+                ':user_id' => $userId,
+                ':address_snapshot_json' => json_encode_unicode($address),
+                ':status' => 'pending_payment',
+                ':payment_status' => 'unpaid',
+                ':payment_method' => 'unselected',
+                ':subtotal_amount' => round($subtotal, 2),
+                ':discount_amount' => round($subtotal - $payable, 2),
+                ':payable_amount' => round($payable, 2),
+                ':paid_amount' => 0,
+                ':member_discount_rate' => $discountRate,
+                ':membership_snapshot_json' => json_encode_unicode($memberSnapshot ?: []),
+                ':placed_at' => now(),
+                ':expires_at' => $expiresAt,
+                ':created_at' => now(),
+                ':updated_at' => now(),
+            ]);
+            $orderId = (int) $pdo->lastInsertId();
+
+            $itemStmt = $pdo->prepare(
+                'INSERT INTO order_items (order_id, product_id, sku_id, product_name, sku_name, quantity, unit_price, final_unit_price,
+                    line_total, support_member_discount, cover_image, attribute_snapshot_json, created_at, updated_at)
+                 VALUES (:order_id, :product_id, :sku_id, :product_name, :sku_name, :quantity, :unit_price, :final_unit_price,
+                    :line_total, :support_member_discount, :cover_image, :attribute_snapshot_json, :created_at, :updated_at)'
+            );
+            $updateSkuStmt = $pdo->prepare('UPDATE product_skus SET stock = stock - :quantity, updated_at = :updated_at WHERE id = :sku_id');
+            $updateProductStmt = $pdo->prepare('UPDATE products SET stock_total = stock_total - :quantity, updated_at = :updated_at WHERE id = :product_id');
+            $deleteCartStmt = $removeCartItems
+                ? $pdo->prepare('DELETE FROM cart_items WHERE id = :id')
+                : null;
+
+            foreach ($items as $index => $item) {
+                $locked = $lockedItems[$index];
+                $attributes = json_decode((string) ($locked['attribute_json'] ?? '[]'), true) ?: [];
+                $unitPrice = (float) ($locked['sku_price'] ?? $locked['price']);
+                $finalUnitPrice = (int) $locked['support_member_discount'] === 1
+                    ? round($unitPrice * $discountRate, 2)
+                    : $unitPrice;
+                $quantity = (int) ($item['quantity'] ?? 0);
+                $skuId = (int) ($item['sku_id'] ?? 0);
+
+                $itemStmt->execute([
+                    ':order_id' => $orderId,
+                    ':product_id' => (int) ($item['product_id'] ?? 0),
+                    ':sku_id' => $skuId,
+                    ':product_name' => $locked['name'],
+                    ':sku_name' => implode(' / ', array_values($attributes)),
+                    ':quantity' => $quantity,
+                    ':unit_price' => $unitPrice,
+                    ':final_unit_price' => $finalUnitPrice,
+                    ':line_total' => round($finalUnitPrice * $quantity, 2),
+                    ':support_member_discount' => (int) $locked['support_member_discount'],
+                    ':cover_image' => $locked['sku_cover_image'] ?: $locked['cover_image'],
+                    ':attribute_snapshot_json' => json_encode_unicode($attributes),
+                    ':created_at' => now(),
+                    ':updated_at' => now(),
+                ]);
+
+                if ($skuId > 0) {
+                    $updateSkuStmt->execute([':quantity' => $quantity, ':updated_at' => now(), ':sku_id' => $skuId]);
+                }
+                $updateProductStmt->execute([':quantity' => $quantity, ':updated_at' => now(), ':product_id' => (int) ($item['product_id'] ?? 0)]);
+
+                if ($deleteCartStmt && !empty($item['id'])) {
+                    $deleteCartStmt->execute([':id' => (int) $item['id']]);
+                }
+            }
+
+            $pdo->commit();
+            $this->setOrderExpireKey($orderNo, $orderId);
+
+            $order = $this->findOrder($orderId, $userId, true);
+            if ($order && $this->notifications) {
+                $this->notifications->notifyUser('created', $order, $user);
+            }
+
+            return $order ?? [];
+        } catch (\Throwable $throwable) {
+            $pdo->rollBack();
+            throw $throwable;
+        }
     }
 
     public function closeExpiredOrders(): void
@@ -977,6 +1150,9 @@ class OrderService
     private function goodsNamesFromOrder(array $order): string
     {
         $items = $order['items'] ?? [];
-        return implode(',', array_column($items, 'product_name'));
+        return implode(',', array_map(
+            static fn (array $item): string => sprintf('%s*%d', (string) ($item['product_name'] ?? ''), (int) ($item['quantity'] ?? 0)),
+            $items
+        ));
     }
 }

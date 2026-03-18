@@ -125,6 +125,7 @@
             'pageKey' => $pageKey ?? '',
             'csrfToken' => $csrfToken ?? '',
             'currentUser' => $currentUser,
+            'currentMember' => $currentMember ?? null,
             'appName' => $appName ?? '奇妙集市',
         ]) ?>;
     </script>

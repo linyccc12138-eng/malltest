@@ -125,7 +125,7 @@
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                             <div class="text-sm text-ink/55">订单号 <span x-text="order.order_no"></span></div>
-                            <div class="mt-1 font-medium text-ink">状态：<span x-text="order.status"></span></div>
+                            <div class="mt-1 font-medium text-ink">状态：<span x-text="orderStatusLabel(order)"></span></div>
                         </div>
                         <div class="text-right">
                             <div class="text-sm text-ink/55">应付金额</div>
@@ -134,6 +134,7 @@
                     </div>
                     <div class="mt-4 flex flex-wrap gap-2">
                         <button @click="openOrder(order.id)" type="button" class="rounded-full border border-bronze/15 px-3 py-2 text-xs text-bronze">查看详情</button>
+                        <button x-show="order.status === 'pending_payment'" @click="payOrder(order.id)" type="button" class="rounded-full border border-teal/20 px-3 py-2 text-xs text-teal">立即付款</button>
                         <button x-show="['pending_payment','pending_shipment'].includes(order.status)" @click="cancelOrder(order.id)" type="button" class="rounded-full border border-rose/20 px-3 py-2 text-xs text-rose">取消订单</button>
                         <button x-show="order.status === 'pending_receipt'" @click="completeOrder(order.id)" type="button" class="rounded-full border border-sage/20 px-3 py-2 text-xs text-sage">确认收货</button>
                     </div>
