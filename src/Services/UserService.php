@@ -91,6 +91,47 @@ class UserService
         ];
     }
 
+    public function loginWithOpenid(string $openid, Request $request): array
+    {
+        $normalizedOpenid = $this->normalizeOpenid($openid);
+        if ($normalizedOpenid === null) {
+            throw new \RuntimeException('尚未获取当前微信身份，请稍后重试。');
+        }
+
+        $user = $this->findUserByOpenid($normalizedOpenid);
+        if (!$user || ($user['status'] ?? 'disabled') !== 'active') {
+            $this->logger->warning(
+                'wechat_auth',
+                '微信登录失败，未找到已绑定的有效用户',
+                $this->openidLogContext($normalizedOpenid),
+                null,
+                $request
+            );
+            throw new \RuntimeException('该微信未绑定用户，请先登录。');
+        }
+
+        $this->session->put('auth_user_id', (int) $user['id']);
+
+        $update = $this->db->mall()->prepare('UPDATE mall_users SET last_login_at = :last_login_at WHERE id = :id');
+        $update->execute([':last_login_at' => now(), ':id' => (int) $user['id']]);
+
+        $this->logger->info(
+            'wechat_auth',
+            '微信登录成功',
+            $this->openidLogContext($normalizedOpenid) + [
+                'login_user_id' => (int) $user['id'],
+                'login_phone' => (string) ($user['phone'] ?? ''),
+            ],
+            (int) $user['id'],
+            $request
+        );
+
+        return [
+            'id' => (int) $user['id'],
+            'role' => (string) $user['role'],
+        ];
+    }
+
     public function logout(): void
     {
         $this->session->forget('auth_user_id');
@@ -210,6 +251,7 @@ class UserService
         $password = $this->defaultPasswordFromPhone($phone);
         $this->assertPhoneUnique($phone, null);
         $this->assertMembershipBindingAvailable($membershipMemberId, null, $allowDuplicateMembership);
+        $this->assertOpenidAvailable($data['openid'] ?? null, null);
 
         $stmt = $this->db->mall()->prepare(
             'INSERT INTO mall_users (username, password_hash, nickname, phone, role, openid, membership_member_id, status, created_at, updated_at)
@@ -221,7 +263,7 @@ class UserService
             ':nickname' => trim((string) ($data['nickname'] ?? '')) ?: $username,
             ':phone' => $phone,
             ':role' => (string) ($data['role'] ?? 'customer'),
-            ':openid' => trim((string) ($data['openid'] ?? '')),
+            ':openid' => $this->normalizeOpenid($data['openid'] ?? null),
             ':membership_member_id' => $membershipMemberId,
             ':status' => (string) ($data['status'] ?? 'active'),
             ':created_at' => now(),
@@ -256,6 +298,7 @@ class UserService
 
         $this->assertPhoneUnique($phone, $userId);
         $this->assertMembershipBindingAvailable($membershipMemberId, $userId, $allowDuplicateMembership);
+        $this->assertOpenidAvailable($data['openid'] ?? ($existing['openid'] ?? null), $userId);
 
         $passwordSql = '';
         $params = [
@@ -264,7 +307,7 @@ class UserService
             ':nickname' => trim((string) ($data['nickname'] ?? $existing['nickname'])) ?: $username,
             ':phone' => $phone,
             ':role' => (string) ($data['role'] ?? $existing['role'] ?? 'customer'),
-            ':openid' => trim((string) ($data['openid'] ?? $existing['openid'] ?? '')),
+            ':openid' => $this->normalizeOpenid($data['openid'] ?? ($existing['openid'] ?? null)),
             ':membership_member_id' => $membershipMemberId,
             ':status' => (string) ($data['status'] ?? $existing['status'] ?? 'active'),
             ':updated_at' => now(),
@@ -323,6 +366,125 @@ class UserService
         $stmt->execute([':id' => $userId]);
         $row = $stmt->fetch();
         return $row ?: null;
+    }
+
+    public function findUserByOpenid(string $openid): ?array
+    {
+        $normalizedOpenid = $this->normalizeOpenid($openid);
+        if ($normalizedOpenid === null) {
+            return null;
+        }
+
+        $stmt = $this->db->mall()->prepare(
+            'SELECT id, username, nickname, phone, role, openid, membership_member_id, status, last_login_at, created_at
+             FROM mall_users
+             WHERE openid = :openid
+             LIMIT 1'
+        );
+        $stmt->execute([':openid' => $normalizedOpenid]);
+        $row = $stmt->fetch();
+        return $row ?: null;
+    }
+
+    public function bindOpenid(int $userId, string $openid, Request $request): array
+    {
+        $normalizedOpenid = $this->normalizeOpenid($openid);
+        if ($normalizedOpenid === null) {
+            throw new \RuntimeException('尚未获取当前微信身份，请稍后重试。');
+        }
+
+        $user = $this->findUser($userId);
+        if (!$user) {
+            throw new \RuntimeException('当前用户不存在。');
+        }
+
+        $currentOpenid = $this->normalizeOpenid($user['openid'] ?? null);
+        if ($currentOpenid !== null && $currentOpenid === $normalizedOpenid) {
+            $this->logger->info(
+                'wechat_auth',
+                '微信绑定已存在，跳过重复绑定',
+                $this->openidLogContext($normalizedOpenid) + ['bind_user_id' => $userId],
+                $userId,
+                $request
+            );
+
+            return $user;
+        }
+
+        if ($currentOpenid !== null) {
+            throw new \RuntimeException('当前账号已绑定微信，请先解绑后再绑定新的微信账号。');
+        }
+
+        $duplicate = $this->findUserByOpenid($normalizedOpenid);
+        if ($duplicate && (int) $duplicate['id'] !== $userId) {
+            $this->logger->warning(
+                'wechat_auth',
+                '微信绑定失败，openid 已绑定其他用户',
+                $this->openidLogContext($normalizedOpenid) + [
+                    'bind_user_id' => $userId,
+                    'duplicate_user_id' => (int) $duplicate['id'],
+                ],
+                $userId,
+                $request
+            );
+            throw new \RuntimeException('该微信已绑定其他用户，请先解绑后再操作。');
+        }
+
+        $stmt = $this->db->mall()->prepare(
+            'UPDATE mall_users SET openid = :openid, updated_at = :updated_at WHERE id = :id'
+        );
+        $stmt->execute([
+            ':openid' => $normalizedOpenid,
+            ':updated_at' => now(),
+            ':id' => $userId,
+        ]);
+
+        $this->logger->info(
+            'wechat_auth',
+            '微信绑定成功',
+            $this->openidLogContext($normalizedOpenid) + [
+                'bind_user_id' => $userId,
+                'bind_phone' => (string) ($user['phone'] ?? ''),
+            ],
+            $userId,
+            $request
+        );
+
+        return $this->findUser($userId) ?? [];
+    }
+
+    public function unbindOpenid(int $userId, Request $request): array
+    {
+        $user = $this->findUser($userId);
+        if (!$user) {
+            throw new \RuntimeException('当前用户不存在。');
+        }
+
+        $currentOpenid = $this->normalizeOpenid($user['openid'] ?? null);
+        if ($currentOpenid === null) {
+            throw new \RuntimeException('当前账号尚未绑定微信。');
+        }
+
+        $stmt = $this->db->mall()->prepare(
+            'UPDATE mall_users SET openid = NULL, updated_at = :updated_at WHERE id = :id'
+        );
+        $stmt->execute([
+            ':updated_at' => now(),
+            ':id' => $userId,
+        ]);
+
+        $this->logger->info(
+            'wechat_auth',
+            '微信解绑成功',
+            $this->openidLogContext($currentOpenid) + [
+                'unbind_user_id' => $userId,
+                'unbind_phone' => (string) ($user['phone'] ?? ''),
+            ],
+            $userId,
+            $request
+        );
+
+        return $this->findUser($userId) ?? [];
     }
 
     public function addresses(int $userId): array
@@ -453,6 +615,19 @@ class UserService
         }
     }
 
+    private function assertOpenidAvailable(mixed $openid, ?int $excludeUserId): void
+    {
+        $normalizedOpenid = $this->normalizeOpenid($openid);
+        if ($normalizedOpenid === null) {
+            return;
+        }
+
+        $duplicate = $this->findUserByOpenid($normalizedOpenid);
+        if ($duplicate && (int) $duplicate['id'] !== (int) ($excludeUserId ?? 0)) {
+            throw new \RuntimeException('该微信 OpenID 已绑定其他用户。');
+        }
+    }
+
     private function assertMembershipBindingAvailable(?int $membershipMemberId, ?int $excludeUserId, bool $allowDuplicateMembership): void
     {
         if (!$membershipMemberId) {
@@ -523,5 +698,19 @@ class UserService
         }
 
         return substr($digits, -8);
+    }
+
+    private function normalizeOpenid(mixed $openid): ?string
+    {
+        $normalized = trim((string) ($openid ?? ''));
+        return $normalized !== '' ? $normalized : null;
+    }
+
+    private function openidLogContext(string $openid): array
+    {
+        return [
+            'openid_masked' => substr($openid, 0, 4) . '***' . substr($openid, -4),
+            'openid_hash' => sha1($openid),
+        ];
     }
 }

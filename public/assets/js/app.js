@@ -196,6 +196,65 @@
         window.setTimeout(() => item.remove(), 2800);
     };
 
+    const isWechatUserAgent = () => /MicroMessenger/i.test(window.navigator.userAgent || '');
+    const wechatOauthAttemptKey = (scene) => `wechat-oauth-attempted:${scene}`;
+    const hasWechatOauthAttempted = (scene) => {
+        try {
+            return window.sessionStorage.getItem(wechatOauthAttemptKey(scene)) === '1';
+        } catch (error) {
+            return false;
+        }
+    };
+    const markWechatOauthAttempted = (scene) => {
+        try {
+            window.sessionStorage.setItem(wechatOauthAttemptKey(scene), '1');
+        } catch (error) {
+            // ignore
+        }
+    };
+    const clearWechatOauthAttempted = (scene) => {
+        try {
+            window.sessionStorage.removeItem(wechatOauthAttemptKey(scene));
+        } catch (error) {
+            // ignore
+        }
+    };
+    const defaultWechatStatus = () => ({
+        isWechatClient: isWechatUserAgent(),
+        oauthOpenidReady: false,
+        oauthOpenidMasked: '',
+        userHasOpenid: Boolean(bootstrap.currentUser?.openid),
+        userOpenidMasked: '',
+        currentWechatMatchesUser: false,
+        oauthOpenidBoundToOtherUser: false,
+        canBindCurrentWechat: false,
+        canUnbindCurrentWechat: Boolean(bootstrap.currentUser?.openid),
+    });
+    const mapWechatStatus = (payload = {}) => ({
+        isWechatClient: Boolean(payload.is_wechat_client),
+        oauthOpenidReady: Boolean(payload.oauth_openid_ready),
+        oauthOpenidMasked: payload.oauth_openid_masked || '',
+        userHasOpenid: Boolean(payload.user_has_openid),
+        userOpenidMasked: payload.user_openid_masked || '',
+        currentWechatMatchesUser: Boolean(payload.current_wechat_matches_user),
+        oauthOpenidBoundToOtherUser: Boolean(payload.oauth_openid_bound_to_other_user),
+        canBindCurrentWechat: Boolean(payload.can_bind_current_wechat),
+        canUnbindCurrentWechat: Boolean(payload.can_unbind_current_wechat),
+    });
+    const fetchWechatStatus = async () => {
+        const data = await apiRequest('/mall/api/wechat/status');
+        return { ...defaultWechatStatus(), ...mapWechatStatus(data) };
+    };
+    const startWechatOauth = async (scene, returnUrl = `${window.location.pathname}${window.location.search}`) => {
+        markWechatOauthAttempted(scene);
+        const query = new URLSearchParams({ scene, return_url: returnUrl });
+        const data = await apiRequest(`/mall/api/wechat/oauth-url?${query.toString()}`);
+        if (!data.authorize_url) {
+            throw new Error('未生成微信授权地址。');
+        }
+        window.location.href = data.authorize_url;
+    };
+
     const syncHeaderOffset = () => {
         const header = document.querySelector('header');
         const offset = header ? Math.ceil(header.getBoundingClientRect().height) + 16 : 80;
@@ -621,16 +680,105 @@
     document.addEventListener('alpine:init', () => {
         Alpine.data('loginPage', () => ({
             form: { username: '', password: '' },
+            wechat: { ...defaultWechatStatus(), loading: false },
+            init() {
+                void this.bootstrapWechat();
+            },
+            async bootstrapWechat() {
+                await this.refreshWechatStatus();
+                if (this.wechat.oauthOpenidReady) {
+                    clearWechatOauthAttempted('login');
+                    return;
+                }
+                if (!this.wechat.isWechatClient || hasWechatOauthAttempted('login')) {
+                    return;
+                }
+                try {
+                    await startWechatOauth('login');
+                } catch (error) {
+                    notice(error.message, 'error');
+                }
+            },
+            async refreshWechatStatus() {
+                try {
+                    const status = await fetchWechatStatus();
+                    this.wechat = { ...this.wechat, ...status };
+                    if (status.oauthOpenidReady) {
+                        clearWechatOauthAttempted('login');
+                    }
+                } catch (error) {
+                    this.wechat = { ...this.wechat, isWechatClient: isWechatUserAgent() };
+                }
+            },
+            async maybeBindCurrentWechatAfterLogin() {
+                const status = await fetchWechatStatus();
+                this.wechat = { ...this.wechat, ...status };
+                if (status.oauthOpenidReady) {
+                    clearWechatOauthAttempted('login');
+                }
+                if (!status.oauthOpenidReady || status.userHasOpenid) {
+                    return;
+                }
+                if (status.oauthOpenidBoundToOtherUser && !status.currentWechatMatchesUser) {
+                    notice('当前微信已绑定其他用户，当前账号无法重复绑定。', 'error');
+                    return;
+                }
+                if (!window.confirm('是否绑定当前微信账号?')) {
+                    return;
+                }
+
+                await apiRequest('/mall/api/wechat/bind', {
+                    method: 'POST',
+                    body: {},
+                });
+                notice('微信绑定成功。');
+            },
             async submit() {
                 try {
+                    this.wechat.loading = true;
                     const data = await apiRequest('/mall/api/auth/login', {
                         method: 'POST',
                         body: this.form,
                     });
+                    try {
+                        await this.maybeBindCurrentWechatAfterLogin();
+                    } catch (bindError) {
+                        notice(bindError.message, 'error');
+                    }
                     notice('登录成功。');
                     window.location.href = data.user.role === 'admin' ? '/mall/admin' : '/mall';
                 } catch (error) {
                     notice(error.message, 'error');
+                } finally {
+                    this.wechat.loading = false;
+                }
+            },
+            async loginWithWechat() {
+                if (this.wechat.loading) {
+                    return;
+                }
+                try {
+                    this.wechat.loading = true;
+                    await this.refreshWechatStatus();
+                    if (!this.wechat.isWechatClient) {
+                        throw new Error('请在微信客户端中打开。');
+                    }
+                    if (!this.wechat.oauthOpenidReady) {
+                        await startWechatOauth('login');
+                        return;
+                    }
+
+                    const data = await apiRequest('/mall/api/auth/wechat-login', {
+                        method: 'POST',
+                        body: {},
+                    });
+                    clearWechatOauthAttempted('login');
+                    notice('登录成功。');
+                    window.location.href = data.user.role === 'admin' ? '/mall/admin' : '/mall';
+                } catch (error) {
+                    notice(error.message, 'error');
+                } finally {
+                    this.wechat.loading = false;
                 }
             },
         }));
@@ -1627,13 +1775,96 @@
         }));
 
         Alpine.data('bindWechatPage', () => ({
-            bindUrl: '',
-            async loadBindUrl() {
+            status: { ...defaultWechatStatus() },
+            loading: false,
+            init() {
+                void this.bootstrapWechat();
+            },
+            async bootstrapWechat() {
+                await this.refreshStatus();
+                if (this.status.oauthOpenidReady) {
+                    clearWechatOauthAttempted('bind');
+                    return;
+                }
+                if (!this.status.isWechatClient || hasWechatOauthAttempted('bind')) {
+                    return;
+                }
                 try {
-                    const data = await apiRequest('/mall/api/wechat/bind-url');
-                    this.bindUrl = data.authorize_url;
+                    await startWechatOauth('bind');
                 } catch (error) {
                     notice(error.message, 'error');
+                }
+            },
+            async refreshStatus() {
+                try {
+                    const status = await fetchWechatStatus();
+                    this.status = { ...this.status, ...status };
+                    if (status.oauthOpenidReady) {
+                        clearWechatOauthAttempted('bind');
+                    }
+                } catch (error) {
+                    this.status = { ...this.status, isWechatClient: isWechatUserAgent() };
+                }
+            },
+            async retryWechatOauth() {
+                try {
+                    this.loading = true;
+                    if (!this.status.isWechatClient) {
+                        throw new Error('请在微信客户端中打开。');
+                    }
+                    await startWechatOauth('bind');
+                } catch (error) {
+                    notice(error.message, 'error');
+                } finally {
+                    this.loading = false;
+                }
+            },
+            async bindCurrentWechat() {
+                try {
+                    this.loading = true;
+                    await this.refreshStatus();
+                    if (!this.status.isWechatClient) {
+                        throw new Error('请在微信客户端中打开。');
+                    }
+                    if (!this.status.oauthOpenidReady) {
+                        await startWechatOauth('bind');
+                        return;
+                    }
+                    if (this.status.oauthOpenidBoundToOtherUser && !this.status.currentWechatMatchesUser) {
+                        throw new Error('当前微信已绑定其他账号，无法重复绑定。');
+                    }
+                    if (!window.confirm('是否绑定当前微信账号?')) {
+                        return;
+                    }
+
+                    await apiRequest('/mall/api/wechat/bind', {
+                        method: 'POST',
+                        body: {},
+                    });
+                    notice('微信绑定成功。');
+                    await this.refreshStatus();
+                } catch (error) {
+                    notice(error.message, 'error');
+                } finally {
+                    this.loading = false;
+                }
+            },
+            async unbindCurrentWechat() {
+                if (!window.confirm('确认解除当前微信绑定吗？')) {
+                    return;
+                }
+                try {
+                    this.loading = true;
+                    await apiRequest('/mall/api/wechat/unbind', {
+                        method: 'POST',
+                        body: {},
+                    });
+                    notice('微信解绑成功。');
+                    await this.refreshStatus();
+                } catch (error) {
+                    notice(error.message, 'error');
+                } finally {
+                    this.loading = false;
                 }
             },
         }));

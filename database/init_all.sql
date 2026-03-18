@@ -76,12 +76,13 @@ CREATE TABLE IF NOT EXISTS mall_users (
   nickname VARCHAR(120) NOT NULL,
   phone VARCHAR(32) DEFAULT '',
   role VARCHAR(20) NOT NULL DEFAULT 'customer',
-  openid VARCHAR(128) DEFAULT '',
+  openid VARCHAR(128) DEFAULT NULL,
   membership_member_id INT DEFAULT NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'active',
   last_login_at DATETIME DEFAULT NULL,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL,
+  UNIQUE KEY uniq_openid (openid),
   KEY idx_membership_member_id (membership_member_id),
   KEY idx_role_status (role, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商城用户表';
@@ -298,8 +299,8 @@ CREATE TABLE IF NOT EXISTS system_logs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='分级系统日志表';
 
 INSERT INTO mall_users (id, username, password_hash, nickname, phone, role, openid, membership_member_id, status, last_login_at, created_at, updated_at) VALUES
-(1, 'admin', '$2y$12$yyLvJFaDQw1LUM/A6D/pCOqAgSExTaN7kOrugOicpcaOFQ8KrBBUq', '系统管理员', '13800000000', 'admin', '', 1, 'active', NULL, NOW(), NOW()),
-(2, 'demo_user', '$2y$12$HI463k7fif.ZsDYr6S1XEOoW8yyh/G5Fkblaf57vyXLMjWUWQjk8K', '演示用户', '13900000000', 'customer', '', 1, 'active', NULL, NOW(), NOW())
+(1, 'admin', '$2y$12$yyLvJFaDQw1LUM/A6D/pCOqAgSExTaN7kOrugOicpcaOFQ8KrBBUq', '系统管理员', '13800000000', 'admin', NULL, 1, 'active', NULL, NOW(), NOW()),
+(2, 'demo_user', '$2y$12$HI463k7fif.ZsDYr6S1XEOoW8yyh/G5Fkblaf57vyXLMjWUWQjk8K', '演示用户', '13900000000', 'customer', NULL, 1, 'active', NULL, NOW(), NOW())
 ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), phone = VALUES(phone), role = VALUES(role), membership_member_id = VALUES(membership_member_id), status = VALUES(status), updated_at = NOW();
 
 INSERT INTO user_addresses (user_id, receiver_name, receiver_phone, province, city, district, detail_address, postal_code, is_default, created_at, updated_at)

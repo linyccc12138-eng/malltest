@@ -90,6 +90,7 @@ $router->get('/mall/admin/activities/edit', [$pageController, 'adminActivityEdit
 
 $router->get('/mall/api/session', [$apiController, 'session']);
 $router->post('/mall/api/auth/login', [$apiController, 'login']);
+$router->post('/mall/api/auth/wechat-login', [$apiController, 'wechatLogin']);
 $router->post('/mall/api/auth/logout', [$apiController, 'logout']);
 $router->get('/mall/api/products', [$apiController, 'products']);
 $router->get('/mall/api/products/{id}/quick-view', [$apiController, 'quickView']);
@@ -113,6 +114,10 @@ $router->post('/mall/api/orders/{id}/cancel', [$apiController, 'cancelOrder']);
 $router->post('/mall/api/orders/{id}/complete', [$apiController, 'completeOrder']);
 $router->get('/mall/api/wallet', [$apiController, 'wallet']);
 $router->get('/mall/api/wechat/bind-url', [$apiController, 'bindWechatUrl']);
+$router->get('/mall/api/wechat/oauth-url', [$apiController, 'wechatOauthUrl']);
+$router->get('/mall/api/wechat/status', [$apiController, 'wechatStatus']);
+$router->post('/mall/api/wechat/bind', [$apiController, 'bindWechatCurrent']);
+$router->post('/mall/api/wechat/unbind', [$apiController, 'unbindWechatCurrent']);
 $router->get('/mall/api/wechat/jssdk-config', [$apiController, 'wechatJsSdkConfig']);
 $router->get('/mall/api/wechat/callback', [$apiController, 'wechatCallback']);
 $router->post('/mall/api/wechat/notify', [$apiController, 'wechatNotify']);
