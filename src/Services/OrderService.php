@@ -358,7 +358,7 @@ class OrderService
 
             $paidOrder = $this->findOrder($orderId, $userId, true);
             if ($paidOrder && $this->notifications) {
-                $this->notifications->notifyAdmins('paid', $paidOrder);
+                $this->notifications->notifyAdmins('paid', $paidOrder, $user);
                 $this->notifications->notifyUser('paid', $paidOrder, $user);
             }
 
@@ -459,8 +459,8 @@ class OrderService
         $user = $this->users->findUser($userId);
         $closed = $this->findOrder($orderId, $userId, true);
         if ($closed && $this->notifications && $user) {
-            $this->notifications->notifyAdmins('cancelled', $closed);
-            $this->notifications->notifyUser('closed', $closed, $user);
+            $this->notifications->notifyAdmins('cancelled', $closed, $user);
+            $this->notifications->notifyUser('cancelled', $closed, $user);
         }
 
         return $closed ?? [];
@@ -524,13 +524,6 @@ class OrderService
         }
 
         $order = $this->findOrder($orderId, $userId, true);
-        if ($order && $this->notifications) {
-            $user = $this->users->findUser($userId);
-            if ($user) {
-                $this->notifications->notifyUser('completed', $order, $user);
-            }
-        }
-
         return $order ?? [];
     }
 
@@ -541,7 +534,7 @@ class OrderService
         if ($order && $this->notifications) {
             $user = $this->users->findUser((int) $order['user_id']);
             if ($user) {
-                $this->notifications->notifyUser('closed', $order, $user);
+                $this->notifications->notifyUser('cancelled', $order, $user);
             }
         }
 
@@ -744,12 +737,7 @@ class OrderService
             $pdo->commit();
             $this->setOrderExpireKey($orderNo, $orderId);
 
-            $order = $this->findOrder($orderId, $userId, true);
-            if ($order && $this->notifications) {
-                $this->notifications->notifyUser('created', $order, $user);
-            }
-
-            return $order ?? [];
+            return $this->findOrder($orderId, $userId, true) ?? [];
         } catch (\Throwable $throwable) {
             $pdo->rollBack();
             throw $throwable;
@@ -1225,7 +1213,7 @@ class OrderService
             if ($fullOrder && $this->notifications) {
                 $user = $this->users->findUser((int) $order['user_id']);
                 if ($user) {
-                    $this->notifications->notifyAdmins('paid', $fullOrder);
+                    $this->notifications->notifyAdmins('paid', $fullOrder, $user);
                     $this->notifications->notifyUser('paid', $fullOrder, $user);
                 }
             }

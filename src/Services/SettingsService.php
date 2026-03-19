@@ -44,6 +44,10 @@ class SettingsService
             $result[$row['setting_key']] = $value;
         }
 
+        if ($group === 'notifications') {
+            $result = $this->normalizeNotificationGroup($result);
+        }
+
         return $result;
     }
 
@@ -66,6 +70,10 @@ class SettingsService
             );
 
             foreach ($values as $key => $value) {
+                if (is_bool($value)) {
+                    $value = $value ? '1' : '0';
+                }
+
                 if (is_array($value)) {
                     $value = json_encode_unicode($value);
                 }
@@ -178,17 +186,26 @@ class SettingsService
                 'admin_paid_template_id' => '',
                 'admin_cancelled_enabled' => '1',
                 'admin_cancelled_template_id' => '',
-                'user_created_enabled' => '1',
-                'user_created_template_id' => '',
                 'user_paid_enabled' => '1',
                 'user_paid_template_id' => '',
                 'user_shipped_enabled' => '1',
                 'user_shipped_template_id' => '',
-                'user_completed_enabled' => '1',
-                'user_completed_template_id' => '',
-                'user_closed_enabled' => '1',
-                'user_closed_template_id' => '',
+                'user_cancelled_enabled' => '1',
+                'user_cancelled_template_id' => '',
             ],
         ];
+    }
+
+    private function normalizeNotificationGroup(array $values): array
+    {
+        if (!array_key_exists('user_cancelled_enabled', $values) && array_key_exists('user_closed_enabled', $values)) {
+            $values['user_cancelled_enabled'] = $values['user_closed_enabled'];
+        }
+
+        if (!array_key_exists('user_cancelled_template_id', $values) && array_key_exists('user_closed_template_id', $values)) {
+            $values['user_cancelled_template_id'] = $values['user_closed_template_id'];
+        }
+
+        return $values;
     }
 }

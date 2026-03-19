@@ -513,22 +513,18 @@
         <div class="rounded-[1.8rem] border border-bronze/10 bg-white/80 p-5 shadow-card">
             <h2 class="font-display text-2xl text-ink">消息通知配置</h2>
             <div class="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                <label class="block text-sm text-ink/70">管理员付款模板 ID<input x-model="settings.notifications.admin_paid_template_id" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
-                <label class="block text-sm text-ink/70">管理员取消模板 ID<input x-model="settings.notifications.admin_cancelled_template_id" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
-                <label class="block text-sm text-ink/70">用户下单模板 ID<input x-model="settings.notifications.user_created_template_id" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
-                <label class="block text-sm text-ink/70">用户付款模板 ID<input x-model="settings.notifications.user_paid_template_id" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
-                <label class="block text-sm text-ink/70">用户发货模板 ID<input x-model="settings.notifications.user_shipped_template_id" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
-                <label class="block text-sm text-ink/70">用户完成模板 ID<input x-model="settings.notifications.user_completed_template_id" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
-                <label class="block text-sm text-ink/70">用户关闭模板 ID<input x-model="settings.notifications.user_closed_template_id" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
+                <label class="block text-sm text-ink/70">管理员付款模板 ID（客户下单通知）<input x-model="settings.notifications.admin_paid_template_id" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
+                <label class="block text-sm text-ink/70">管理员取消模板 ID（订单取消通知）<input x-model="settings.notifications.admin_cancelled_template_id" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
+                <label class="block text-sm text-ink/70">用户付款模板 ID（客户下单通知）<input x-model="settings.notifications.user_paid_template_id" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
+                <label class="block text-sm text-ink/70">用户发货模板 ID（发货成功通知）<input x-model="settings.notifications.user_shipped_template_id" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
+                <label class="block text-sm text-ink/70">用户取消模板 ID（订单取消通知）<input x-model="settings.notifications.user_cancelled_template_id" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
             </div>
             <div class="mt-4 flex flex-wrap gap-4 text-sm text-ink/70">
-                <label class="flex items-center gap-2"><input x-model="settings.notifications.admin_paid_enabled" type="checkbox" true-value="1" false-value="0" class="rounded border-bronze/20">管理员付款通知</label>
-                <label class="flex items-center gap-2"><input x-model="settings.notifications.admin_cancelled_enabled" type="checkbox" true-value="1" false-value="0" class="rounded border-bronze/20">管理员取消通知</label>
-                <label class="flex items-center gap-2"><input x-model="settings.notifications.user_created_enabled" type="checkbox" true-value="1" false-value="0" class="rounded border-bronze/20">用户下单通知</label>
-                <label class="flex items-center gap-2"><input x-model="settings.notifications.user_paid_enabled" type="checkbox" true-value="1" false-value="0" class="rounded border-bronze/20">用户付款通知</label>
-                <label class="flex items-center gap-2"><input x-model="settings.notifications.user_shipped_enabled" type="checkbox" true-value="1" false-value="0" class="rounded border-bronze/20">用户发货通知</label>
-                <label class="flex items-center gap-2"><input x-model="settings.notifications.user_completed_enabled" type="checkbox" true-value="1" false-value="0" class="rounded border-bronze/20">用户完成通知</label>
-                <label class="flex items-center gap-2"><input x-model="settings.notifications.user_closed_enabled" type="checkbox" true-value="1" false-value="0" class="rounded border-bronze/20">用户关闭通知</label>
+                <label class="flex items-center gap-2"><input :checked="settings.notifications.admin_paid_enabled === '1'" @change="settings.notifications.admin_paid_enabled = $event.target.checked ? '1' : '0'" type="checkbox" class="rounded border-bronze/20">管理员付款通知</label>
+                <label class="flex items-center gap-2"><input :checked="settings.notifications.admin_cancelled_enabled === '1'" @change="settings.notifications.admin_cancelled_enabled = $event.target.checked ? '1' : '0'" type="checkbox" class="rounded border-bronze/20">管理员取消通知</label>
+                <label class="flex items-center gap-2"><input :checked="settings.notifications.user_paid_enabled === '1'" @change="settings.notifications.user_paid_enabled = $event.target.checked ? '1' : '0'" type="checkbox" class="rounded border-bronze/20">用户付款通知</label>
+                <label class="flex items-center gap-2"><input :checked="settings.notifications.user_shipped_enabled === '1'" @change="settings.notifications.user_shipped_enabled = $event.target.checked ? '1' : '0'" type="checkbox" class="rounded border-bronze/20">用户发货通知</label>
+                <label class="flex items-center gap-2"><input :checked="settings.notifications.user_cancelled_enabled === '1'" @change="settings.notifications.user_cancelled_enabled = $event.target.checked ? '1' : '0'" type="checkbox" class="rounded border-bronze/20">用户取消通知</label>
             </div>
             <button @click="saveNotificationSettings()" class="mt-5 rounded-full bg-bronze px-5 py-3 text-sm text-white shadow-card">保存通知配置</button>
         </div>

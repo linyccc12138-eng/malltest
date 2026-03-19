@@ -255,9 +255,12 @@ class WechatService
         $payload = [
             'touser' => $openid,
             'template_id' => $templateId,
-            'url' => $url,
             'data' => $data,
         ];
+        $normalizedUrl = $this->normalizeTemplateUrl($url);
+        if ($normalizedUrl !== null) {
+            $payload['url'] = $normalizedUrl;
+        }
 
         $response = $this->httpJson(
             'POST',
@@ -275,6 +278,25 @@ class WechatService
             'success' => $success,
             'response' => $response,
         ];
+    }
+
+    private function normalizeTemplateUrl(?string $url): ?string
+    {
+        $normalized = trim((string) $url);
+        if ($normalized === '') {
+            return null;
+        }
+
+        if (preg_match('#^https?://#i', $normalized)) {
+            return $normalized;
+        }
+
+        $appUrl = rtrim((string) env('APP_URL', ''), '/');
+        if ($appUrl === '') {
+            return null;
+        }
+
+        return $appUrl . '/' . ltrim($normalized, '/');
     }
 
     private function fetchAccessToken(string $appId, string $secret): array

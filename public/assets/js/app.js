@@ -849,28 +849,35 @@
         ends_at: item.ends_at ? String(item.ends_at).replace(' ', 'T').slice(0, 16) : '',
     });
 
+    const normalizeToggleValue = (value, fallback = '1') => {
+        if (value === undefined || value === null || value === '') {
+            return fallback;
+        }
+        if (value === true || value === 1 || value === '1') {
+            return '1';
+        }
+        return '0';
+    };
+
+    const normalizeNotificationSettings = (notifications = {}) => ({
+        admin_paid_enabled: normalizeToggleValue(notifications.admin_paid_enabled, '1'),
+        admin_paid_template_id: notifications.admin_paid_template_id || '',
+        admin_cancelled_enabled: normalizeToggleValue(notifications.admin_cancelled_enabled, '1'),
+        admin_cancelled_template_id: notifications.admin_cancelled_template_id || '',
+        user_paid_enabled: normalizeToggleValue(notifications.user_paid_enabled, '1'),
+        user_paid_template_id: notifications.user_paid_template_id || '',
+        user_shipped_enabled: normalizeToggleValue(notifications.user_shipped_enabled, '1'),
+        user_shipped_template_id: notifications.user_shipped_template_id || '',
+        user_cancelled_enabled: normalizeToggleValue(notifications.user_cancelled_enabled ?? notifications.user_closed_enabled, '1'),
+        user_cancelled_template_id: notifications.user_cancelled_template_id || notifications.user_closed_template_id || '',
+    });
+
     const normalizeSettings = (settings = {}) => ({
         membership_mysql: { host: '', port: '3306', database: '', username: '', password: '', charset: 'utf8mb4', ...(settings.membership_mysql || {}) },
         log: { min_level: 'info', retention_days: '30', max_size_mb: '10', ...(settings.log || {}) },
         wechat_pay: { app_id: '', merchant_id: '', merchant_serial_no: '', pay_mode: 'JSAPI', notify_url: '', api_v3_key: '', private_key_content: '', platform_cert_content: '', ...(settings.wechat_pay || {}) },
         wechat_service_account: { app_id: '', app_secret: '', ...(settings.wechat_service_account || {}) },
-        notifications: {
-            admin_paid_enabled: '1',
-            admin_paid_template_id: '',
-            admin_cancelled_enabled: '1',
-            admin_cancelled_template_id: '',
-            user_created_enabled: '1',
-            user_created_template_id: '',
-            user_paid_enabled: '1',
-            user_paid_template_id: '',
-            user_shipped_enabled: '1',
-            user_shipped_template_id: '',
-            user_completed_enabled: '1',
-            user_completed_template_id: '',
-            user_closed_enabled: '1',
-            user_closed_template_id: '',
-            ...(settings.notifications || {}),
-        },
+        notifications: normalizeNotificationSettings(settings.notifications || {}),
     });
 
     const defaultCategoryForm = () => ({ id: null, name: '', parent_id: '0', level: 1 });
@@ -3131,6 +3138,7 @@
             },
             async saveNotificationSettings() {
                 try {
+                    this.settings.notifications = normalizeNotificationSettings(this.settings.notifications);
                     await apiRequest('/mall/api/admin/settings/notifications', { method: 'POST', body: this.settings.notifications });
                     notice('通知配置已保存。');
                 } catch (error) {
