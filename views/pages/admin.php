@@ -769,6 +769,26 @@
                     </div>
                 </div>
 
+                <div class="mt-4 grid gap-4 md:grid-cols-2">
+                    <template x-if="orderHasShippingInfo(orderDetail || {})">
+                        <div class="rounded-[1.4rem] border border-teal/15 bg-teal/5 p-4">
+                            <div class="space-y-2 text-sm text-ink/65">
+                                <div>发货时间：<span class="text-ink" x-text="orderDetail?.shipped_at || '--'"></span></div>
+                                <div>物流公司：<span class="text-ink" x-text="orderDetail?.shipping_company || '未填写'"></span></div>
+                                <div>物流单号：<span class="text-ink" x-text="orderDetail?.shipping_no || '未填写'"></span></div>
+                            </div>
+                        </div>
+                    </template>
+                    <template x-if="orderHasCloseInfo(orderDetail || {})">
+                        <div class="rounded-[1.4rem] border border-rose/15 bg-rose/5 p-4">
+                            <div class="space-y-2 text-sm text-ink/65">
+                                <div>关闭时间：<span class="text-ink" x-text="orderDetail?.closed_at || '--'"></span></div>
+                                <div>关闭原因：<span class="text-ink" x-text="orderClosedReasonLabel(orderDetail || {})"></span></div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
                 <div class="mt-5 rounded-[1.4rem] border border-bronze/10 bg-white/80 p-4">
                     <div class="font-medium text-ink">商品清单</div>
                     <div class="mt-4 space-y-3">

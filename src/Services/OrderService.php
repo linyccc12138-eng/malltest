@@ -445,6 +445,21 @@ class OrderService
         return $enriched[0] ?? $order;
     }
 
+    public function orderDetailByAccessToken(string $token): array
+    {
+        $payload = parse_order_access_token($token);
+        if (!$payload) {
+            throw new \RuntimeException('订单访问链接无效或已失效。');
+        }
+
+        $order = $this->findOrder((int) $payload['id'], null, true);
+        if (!$order || (string) ($order['order_no'] ?? '') !== (string) $payload['order_no']) {
+            throw new \RuntimeException('订单不存在。');
+        }
+
+        return $order;
+    }
+
     public function cancelOrder(int $userId, int $orderId): array
     {
         $order = $this->findOrder($orderId, $userId, true);

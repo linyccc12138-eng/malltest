@@ -181,6 +181,32 @@
             : Object.values(item?.attributes || {});
         return attributes.map((value) => String(value || '').trim()).filter(Boolean).join(' / ');
     };
+    const orderClosedReasonLabel = (order = {}) => {
+        const reason = String(order?.closed_reason || '').trim();
+        if (!reason) {
+            return '未提供';
+        }
+        if (reason === 'user_cancelled') {
+            return '用户主动取消';
+        }
+        if (reason === 'admin_closed') {
+            return '管理员取消订单';
+        }
+        if (reason === 'timeout') {
+            return '订单支付超时自动关闭';
+        }
+        return reason;
+    };
+    const orderHasShippingInfo = (order = {}) => {
+        return [order?.shipping_company, order?.shipping_no, order?.shipped_at]
+            .map((value) => String(value || '').trim())
+            .some(Boolean);
+    };
+    const orderHasCloseInfo = (order = {}) => {
+        return [order?.closed_reason, order?.closed_at]
+            .map((value) => String(value || '').trim())
+            .some(Boolean) || String(order?.status || '').trim() === 'closed';
+    };
 
     const fallbackBackPath = (pathname) => {
         if (pathname.startsWith('/mall/admin/products/edit')) {
@@ -1770,7 +1796,7 @@
                 }
             },
             openOrder(id) {
-                window.location.href = `/mall/order-result?order_id=${id}`;
+                window.location.href = `/mall/order-detail?order_id=${id}`;
             },
             payOrder(id) {
                 window.location.href = buildCheckoutUrl('repay', { order_id: id });
@@ -2147,6 +2173,57 @@
             },
             statusLabel: orderStatusLabel,
             paymentMethodLabel,
+            orderReceiverAddress,
+            orderItemSpecLabel,
+            orderClosedReasonLabel,
+            orderHasShippingInfo,
+            orderHasCloseInfo,
+            formatMoney,
+        }));
+
+        Alpine.data('orderDetailPage', () => ({
+            order: null,
+            loading: true,
+            errorMessage: '',
+            init() {
+                void this.loadOrder();
+            },
+            requestUrl() {
+                const token = queryParam('token');
+                if (token) {
+                    return `/mall/api/order-detail-access?token=${encodeURIComponent(token)}`;
+                }
+
+                const orderId = queryParam('order_id');
+                if (orderId) {
+                    return `/mall/api/orders/${orderId}`;
+                }
+
+                return '';
+            },
+            async loadOrder() {
+                const url = this.requestUrl();
+                if (!url) {
+                    this.errorMessage = '缺少订单参数。';
+                    this.loading = false;
+                    return;
+                }
+
+                try {
+                    this.order = await apiRequest(url);
+                } catch (error) {
+                    this.errorMessage = error.message || '读取订单失败。';
+                } finally {
+                    this.loading = false;
+                }
+            },
+            statusLabel: orderStatusLabel,
+            paymentMethodLabel,
+            orderReceiverAddress,
+            orderItemSpecLabel,
+            orderClosedReasonLabel,
+            orderHasShippingInfo,
+            orderHasCloseInfo,
             formatMoney,
         }));
 
@@ -3013,6 +3090,9 @@
             adminOrderCanClose,
             orderReceiverAddress,
             orderItemSpecLabel,
+            orderClosedReasonLabel,
+            orderHasShippingInfo,
+            orderHasCloseInfo,
             async loadMembers() {
                 try {
                     const query = new URLSearchParams({

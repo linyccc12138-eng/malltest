@@ -47,7 +47,7 @@ class NotificationService
                 (string) $admin['openid'],
                 $templateId,
                 $this->buildTemplateData($notificationKey, $order, $user),
-                '/mall/admin'
+                $this->buildOrderDetailPath($order)
             );
         }
     }
@@ -78,7 +78,7 @@ class NotificationService
             (string) $user['openid'],
             $templateId,
             $this->buildTemplateData($notificationKey, $order, $user),
-            '/mall/profile'
+            $this->buildOrderDetailPath($order)
         );
 
         if (!($result['success'] ?? false)) {
@@ -228,5 +228,15 @@ class NotificationService
         ), static fn (string $value): bool => $value !== ''));
 
         return implode($separator, $filtered);
+    }
+
+    private function buildOrderDetailPath(array $order): string
+    {
+        $token = generate_order_access_token((int) ($order['id'] ?? 0), (string) ($order['order_no'] ?? ''));
+        if ($token === '') {
+            return '/mall/order-detail';
+        }
+
+        return '/mall/order-detail?token=' . rawurlencode($token);
     }
 }

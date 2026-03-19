@@ -260,6 +260,13 @@ class ApiController extends BaseController
         });
     }
 
+    public function orderDetailAccess(Request $request, array $params = []): Response
+    {
+        return $this->respond(function () use ($request): array {
+            return $this->orders->orderDetailByAccessToken((string) $request->input('token', ''));
+        });
+    }
+
     public function payBalance(Request $request, array $params = []): Response
     {
         return $this->respond(function () use ($request, $params): array {

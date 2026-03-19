@@ -243,6 +243,25 @@ class PageController extends BaseController
         ]);
     }
 
+    public function orderDetail(Request $request, array $params = []): Response
+    {
+        $user = $this->users->currentUser();
+        $orderId = (int) $request->input('order_id', 0);
+        $token = trim((string) $request->input('token', ''));
+        if ($orderId <= 0 && $token === '') {
+            return Response::html('<h1>404</h1><p>订单不存在。</p>', 404);
+        }
+        if ($token === '' && !$user) {
+            return $this->redirect('/mall/login');
+        }
+
+        return $this->view('pages/order-detail', [
+            'pageTitle' => '订单详情',
+            'pageKey' => 'orderDetail',
+            'currentUser' => $user,
+        ]);
+    }
+
     public function admin(Request $request, array $params = []): Response
     {
         $user = $this->users->currentUser();

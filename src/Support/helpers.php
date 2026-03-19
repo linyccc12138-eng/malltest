@@ -116,3 +116,90 @@ if (!function_exists('array_get')) {
         return $value;
     }
 }
+
+if (!function_exists('base64url_encode')) {
+    function base64url_encode(string $value): string
+    {
+        return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
+    }
+}
+
+if (!function_exists('base64url_decode')) {
+    function base64url_decode(string $value): string|false
+    {
+        $normalized = strtr($value, '-_', '+/');
+        $padding = strlen($normalized) % 4;
+        if ($padding > 0) {
+            $normalized .= str_repeat('=', 4 - $padding);
+        }
+
+        return base64_decode($normalized, true);
+    }
+}
+
+if (!function_exists('order_access_token_secret')) {
+    function order_access_token_secret(): string
+    {
+        $secret = (string) env('APP_KEY', '');
+        return $secret !== '' ? $secret : 'magic-mall-order-access';
+    }
+}
+
+if (!function_exists('generate_order_access_token')) {
+    function generate_order_access_token(int $orderId, string $orderNo): string
+    {
+        $normalizedOrderNo = trim($orderNo);
+        if ($orderId <= 0 || $normalizedOrderNo === '') {
+            return '';
+        }
+
+        $payload = base64url_encode(json_encode_unicode([
+            'id' => $orderId,
+            'order_no' => $normalizedOrderNo,
+        ]));
+        $signature = base64url_encode(hash_hmac('sha256', $payload, order_access_token_secret(), true));
+
+        return $payload . '.' . $signature;
+    }
+}
+
+if (!function_exists('parse_order_access_token')) {
+    function parse_order_access_token(string $token): ?array
+    {
+        $normalizedToken = trim($token);
+        if ($normalizedToken === '' || !str_contains($normalizedToken, '.')) {
+            return null;
+        }
+
+        [$payloadPart, $signaturePart] = explode('.', $normalizedToken, 2);
+        if ($payloadPart === '' || $signaturePart === '') {
+            return null;
+        }
+
+        $expectedSignature = base64url_encode(hash_hmac('sha256', $payloadPart, order_access_token_secret(), true));
+        if (!hash_equals($expectedSignature, $signaturePart)) {
+            return null;
+        }
+
+        $decodedPayload = base64url_decode($payloadPart);
+        if ($decodedPayload === false) {
+            return null;
+        }
+
+        $payload = json_decode($decodedPayload, true);
+        if (!is_array($payload)) {
+            return null;
+        }
+
+        $orderId = (int) ($payload['id'] ?? 0);
+        $orderNo = trim((string) ($payload['order_no'] ?? ''));
+        if ($orderId <= 0 || $orderNo === '') {
+            return null;
+        }
+
+        return [
+            'id' => $orderId,
+            'order_no' => $orderNo,
+        ];
+    }
+}
