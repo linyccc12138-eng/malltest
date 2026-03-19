@@ -15,7 +15,7 @@
             <div class="mt-6 space-y-6">
                 <div class="rounded-[1.5rem] bg-parchment/65 p-5">
                     <div class="grid gap-3 text-sm text-ink/70 sm:grid-cols-2">
-                        <div>订单号：<span class="font-medium text-ink" x-text="order.order_no"></span></div>
+                        <div class="flex flex-wrap items-center gap-2">订单号：<span class="font-medium text-ink" x-text="order.order_no"></span><button @click="copyText(order.order_no, '订单号已复制。')" type="button" class="rounded-full border border-bronze/20 px-2.5 py-1 text-xs text-bronze">复制</button></div>
                         <div>下单时间：<span class="font-medium text-ink" x-text="order.placed_at || '--'"></span></div>
                         <div>订单状态：<span class="font-medium text-ink" x-text="statusLabel(order)"></span></div>
                         <div>支付方式：<span class="font-medium text-ink" x-text="paymentMethodLabel(order)"></span></div>
@@ -32,7 +32,7 @@
                         <div class="mt-4 grid gap-3 text-sm text-ink/70 sm:grid-cols-2">
                             <div>发货时间：<span class="font-medium text-ink" x-text="order.shipped_at || '--'"></span></div>
                             <div>物流公司：<span class="font-medium text-ink" x-text="order.shipping_company || '未填写'"></span></div>
-                            <div class="sm:col-span-2">物流单号：<span class="font-medium text-ink" x-text="order.shipping_no || '未填写'"></span></div>
+                            <div class="sm:col-span-2 flex flex-wrap items-center gap-2">物流单号：<span class="font-medium text-ink" x-text="order.shipping_no || '未填写'"></span><button x-show="order.shipping_no" @click="copyText(order.shipping_no, '物流单号已复制。')" type="button" class="rounded-full border border-teal/20 px-2.5 py-1 text-xs text-teal">复制</button></div>
                         </div>
                     </div>
                 </template>

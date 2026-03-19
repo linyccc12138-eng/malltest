@@ -207,6 +207,32 @@
             .map((value) => String(value || '').trim())
             .some(Boolean) || String(order?.status || '').trim() === 'closed';
     };
+    const copyText = async (value, successMessage = '已复制。') => {
+        const text = String(value || '').trim();
+        if (!text) {
+            notice('没有可复制的内容。', 'error');
+            return;
+        }
+
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.setAttribute('readonly', 'readonly');
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+            }
+            notice(successMessage);
+        } catch (error) {
+            notice('复制失败，请手动复制。', 'error');
+        }
+    };
 
     const fallbackBackPath = (pathname) => {
         if (pathname.startsWith('/mall/admin/products/edit')) {
@@ -2178,6 +2204,7 @@
             orderClosedReasonLabel,
             orderHasShippingInfo,
             orderHasCloseInfo,
+            copyText,
             formatMoney,
         }));
 
@@ -2224,6 +2251,7 @@
             orderClosedReasonLabel,
             orderHasShippingInfo,
             orderHasCloseInfo,
+            copyText,
             formatMoney,
         }));
 
@@ -3093,6 +3121,7 @@
             orderClosedReasonLabel,
             orderHasShippingInfo,
             orderHasCloseInfo,
+            copyText,
             async loadMembers() {
                 try {
                     const query = new URLSearchParams({
