@@ -276,6 +276,144 @@
             filename: replaceFileExtension(originalName, 'jpg'),
         };
     };
+    const richTextEditorContentStyle = () => `
+        body {
+            margin: 0;
+            padding: 16px;
+            color: #2f2419;
+            background: #fffaf4;
+            font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+            font-size: 15px;
+            line-height: 1.85;
+        }
+        p {
+            margin: 0 0 1em;
+        }
+        p:last-child {
+            margin-bottom: 0;
+        }
+        p:has(> img:only-child),
+        p:has(> a > img:only-child) {
+            margin-top: 0;
+            margin-bottom: 0;
+        }
+        p:has(> img:only-child) + p:has(> img:only-child),
+        p:has(> a > img:only-child) + p:has(> a > img:only-child) {
+            margin-top: 0;
+        }
+        img {
+            display: block;
+            max-width: 100%;
+            height: auto;
+            margin: 0;
+            border-radius: 16px;
+        }
+        a {
+            color: #9c6737;
+        }
+        ul, ol {
+            margin: 0 0 1em;
+            padding-left: 1.4em;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0 0 1em;
+        }
+        th, td {
+            border: 1px solid rgba(156, 103, 55, 0.2);
+            padding: 0.6em 0.75em;
+            vertical-align: top;
+        }
+        blockquote {
+            margin: 0 0 1em;
+            padding-left: 1em;
+            border-left: 3px solid rgba(156, 103, 55, 0.25);
+            color: rgba(47, 36, 25, 0.72);
+        }
+        figure {
+            margin: 0;
+        }
+    `;
+    const computeRichTextEditorHeight = (host, viewportMode = 'ratio') => {
+        const minimum = 840;
+        const hostWidth = Math.max(0, Number(host?.clientWidth || 0));
+        if (viewportMode === 'fluid') {
+            return Math.max(minimum, window.innerHeight - 220);
+        }
+        const ratioHeight = hostWidth > 0 ? Math.round((hostWidth * 9) / 16) : minimum;
+        return Math.max(minimum, ratioHeight);
+    };
+    const applyRichTextEditorHeight = (editor, host, viewportMode = 'ratio') => {
+        if (!editor || !host) {
+            return;
+        }
+
+        const height = computeRichTextEditorHeight(host, viewportMode);
+        host.style.setProperty('--rich-editor-height', `${height}px`);
+        const container = editor.getContainer?.();
+        if (container) {
+            container.style.height = `${height}px`;
+            container.style.minHeight = `${height}px`;
+        }
+
+        if (typeof editor.theme?.resizeTo === 'function') {
+            try {
+                editor.theme.resizeTo(null, height);
+            } catch (error) {
+                // noop
+            }
+        }
+    };
+    const createRichTextEditor = async ({
+        selector,
+        editorId,
+        initialContent = '',
+        onChange = () => {},
+        getViewportMode = () => 'ratio',
+        getHost = () => null,
+    }) => {
+        await ensureTinyMce();
+        const existingEditor = window.tinymce?.get(editorId);
+        if (existingEditor) {
+            existingEditor.setContent(initialContent || '');
+            window.requestAnimationFrame(() => applyRichTextEditorHeight(existingEditor, getHost(), getViewportMode()));
+            return existingEditor;
+        }
+
+        const result = await window.tinymce?.init({
+            selector,
+            height: 840,
+            menubar: false,
+            plugins: 'lists link image table code fullscreen',
+            toolbar: 'undo redo | styles | bold italic | alignleft aligncenter alignright | bullist numlist | image link table | fullscreen code',
+            automatic_uploads: true,
+            paste_data_images: true,
+            convert_urls: false,
+            relative_urls: false,
+            remove_script_host: false,
+            branding: false,
+            promotion: false,
+            content_style: richTextEditorContentStyle(),
+            setup: (editor) => {
+                editor.on('init', () => {
+                    editor.setContent(initialContent || '');
+                    window.requestAnimationFrame(() => applyRichTextEditorHeight(editor, getHost(), getViewportMode()));
+                });
+                editor.on('change keyup input undo redo SetContent', () => {
+                    onChange(editor.getContent());
+                });
+                editor.on('FullscreenStateChanged', (event) => {
+                    if (!event.state) {
+                        window.requestAnimationFrame(() => applyRichTextEditorHeight(editor, getHost(), getViewportMode()));
+                    }
+                });
+            },
+            images_upload_handler: editorUploadHandler,
+        });
+
+        return Array.isArray(result) ? result[0] : result;
+    };
 
     const isWechatUserAgent = () => /MicroMessenger/i.test(window.navigator.userAgent || '');
     const wechatOauthAttemptKey = (scene) => `wechat-oauth-attempted:${scene}`;
@@ -1980,6 +2118,7 @@
             categories: flattenCategories(pageData.categories || []),
             productForm: normalizeProductForm(pageData.product || {}),
             detailMode: 'preview',
+            detailViewportMode: 'ratio',
             uploading: { cover: false, gallery: false },
             init() {
                 const syncCategorySelection = (value) => {
@@ -2003,8 +2142,23 @@
                 if (!this.productForm.category_id && this.categories[0]) {
                     syncCategorySelection(this.categories[0].id);
                 }
+
+                this.handleEditorResize = () => {
+                    if (this.detailMode === 'edit') {
+                        this.refreshDetailEditorViewport();
+                    }
+                };
+                window.addEventListener('resize', this.handleEditorResize);
             },
             categoryLabel: categoryOptionLabel,
+            refreshDetailEditorViewport() {
+                const editor = window.tinymce?.get('product-detail-editor-page');
+                applyRichTextEditorHeight(editor, this.$refs.detailEditorHost, this.detailViewportMode);
+            },
+            toggleDetailViewportMode() {
+                this.detailViewportMode = this.detailViewportMode === 'ratio' ? 'fluid' : 'ratio';
+                this.$nextTick(() => this.refreshDetailEditorViewport());
+            },
             addSkuRow() {
                 this.productForm.skus = [
                     ...(this.productForm.skus || []),
@@ -2030,35 +2184,16 @@
 
                 if (mode === 'edit') {
                     this.detailMode = 'edit';
-                    await ensureTinyMce();
-                    this.$nextTick(() => {
-                        const existingEditor = window.tinymce?.get('product-detail-editor-page');
-                        if (existingEditor) {
-                            existingEditor.setContent(this.productForm.detail_html || '');
-                            return;
-                        }
-
-                        window.tinymce?.init({
-                            selector: '#product-detail-editor-page',
-                            height: 420,
-                            menubar: false,
-                            plugins: 'lists link image table code',
-                            toolbar: 'undo redo | styles | bold italic | alignleft aligncenter alignright | bullist numlist | image link table | code',
-                            automatic_uploads: true,
-                            paste_data_images: true,
-                            convert_urls: false,
-                            relative_urls: false,
-                            remove_script_host: false,
-                            branding: false,
-                            promotion: false,
-                            setup: (editor) => {
-                                editor.on('init', () => editor.setContent(this.productForm.detail_html || ''));
-                                editor.on('change keyup input undo redo SetContent', () => {
-                                    this.productForm.detail_html = editor.getContent();
-                                });
-                            },
-                            images_upload_handler: editorUploadHandler,
-                        });
+                    await this.$nextTick();
+                    await createRichTextEditor({
+                        selector: '#product-detail-editor-page',
+                        editorId: 'product-detail-editor-page',
+                        initialContent: this.productForm.detail_html || '',
+                        onChange: (content) => {
+                            this.productForm.detail_html = content;
+                        },
+                        getViewportMode: () => this.detailViewportMode,
+                        getHost: () => this.$refs.detailEditorHost,
                     });
                     return;
                 }
@@ -2161,7 +2296,24 @@
         Alpine.data('adminActivityEditorPage', () => ({
             activityForm: normalizeActivityForm(pageData.activity || {}),
             detailMode: 'preview',
+            detailViewportMode: 'ratio',
             uploading: { thumbnail: false },
+            init() {
+                this.handleEditorResize = () => {
+                    if (this.detailMode === 'edit') {
+                        this.refreshDetailEditorViewport();
+                    }
+                };
+                window.addEventListener('resize', this.handleEditorResize);
+            },
+            refreshDetailEditorViewport() {
+                const editor = window.tinymce?.get('activity-detail-editor-page');
+                applyRichTextEditorHeight(editor, this.$refs.detailEditorHost, this.detailViewportMode);
+            },
+            toggleDetailViewportMode() {
+                this.detailViewportMode = this.detailViewportMode === 'ratio' ? 'fluid' : 'ratio';
+                this.$nextTick(() => this.refreshDetailEditorViewport());
+            },
             async switchDetailMode(mode) {
                 if (mode === this.detailMode) {
                     return;
@@ -2169,35 +2321,16 @@
 
                 if (mode === 'edit') {
                     this.detailMode = 'edit';
-                    await ensureTinyMce();
-                    this.$nextTick(() => {
-                        const existingEditor = window.tinymce?.get('activity-detail-editor-page');
-                        if (existingEditor) {
-                            existingEditor.setContent(this.activityForm.content_html || '');
-                            return;
-                        }
-
-                        window.tinymce?.init({
-                            selector: '#activity-detail-editor-page',
-                            height: 420,
-                            menubar: false,
-                            plugins: 'lists link image table code',
-                            toolbar: 'undo redo | styles | bold italic | alignleft aligncenter alignright | bullist numlist | image link table | code',
-                            automatic_uploads: true,
-                            paste_data_images: true,
-                            convert_urls: false,
-                            relative_urls: false,
-                            remove_script_host: false,
-                            branding: false,
-                            promotion: false,
-                            setup: (editor) => {
-                                editor.on('init', () => editor.setContent(this.activityForm.content_html || ''));
-                                editor.on('change keyup input undo redo SetContent', () => {
-                                    this.activityForm.content_html = editor.getContent();
-                                });
-                            },
-                            images_upload_handler: editorUploadHandler,
-                        });
+                    await this.$nextTick();
+                    await createRichTextEditor({
+                        selector: '#activity-detail-editor-page',
+                        editorId: 'activity-detail-editor-page',
+                        initialContent: this.activityForm.content_html || '',
+                        onChange: (content) => {
+                            this.activityForm.content_html = content;
+                        },
+                        getViewportMode: () => this.detailViewportMode,
+                        getHost: () => this.$refs.detailEditorHost,
                     });
                     return;
                 }

@@ -96,7 +96,7 @@
                 <div class="text-sm uppercase tracking-[0.3em] text-bronze/70">商品详情</div>
             </div>
         </div>
-        <article data-product-detail-body class="product-detail-rich prose prose-stone mt-6 max-w-none" x-html="product.detail_html"></article>
+        <article data-product-detail-body class="product-detail-rich rich-content-body prose prose-stone mt-6 max-w-none" x-html="product.detail_html"></article>
     </div>
 
     <template x-teleport="body">

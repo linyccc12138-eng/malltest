@@ -23,7 +23,7 @@
         </div>
     </div>
 
-    <article class="prose prose-stone max-w-none rounded-[2rem] border border-bronze/15 bg-white/85 p-5 shadow-card sm:p-7">
+    <article class="rich-content-body prose prose-stone max-w-none rounded-[2rem] border border-bronze/15 bg-white/85 p-5 shadow-card sm:p-7">
         <?= $activity['content_html'] ?: '<p>暂无活动详情。</p>' ?>
     </article>
 </section>

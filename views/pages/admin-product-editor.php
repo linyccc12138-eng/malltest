@@ -175,6 +175,13 @@ $editorData = [
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <button
+                        x-show="detailMode === 'edit'"
+                        type="button"
+                        @click="toggleDetailViewportMode()"
+                        class="rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze"
+                        x-text="detailViewportMode === 'ratio' ? '16:9' : '自适应'"
+                    ></button>
+                    <button
                         x-show="detailMode === 'preview'"
                         type="button"
                         @click="switchDetailMode('edit')"
@@ -194,10 +201,10 @@ $editorData = [
             </div>
 
             <div x-show="detailMode === 'preview'" class="mt-5" x-cloak>
-                <div class="prose prose-stone min-h-[260px] max-w-none rounded-[1.5rem] border border-bronze/10 bg-parchment/45 p-5" x-html="productForm.detail_html || '<p>暂无详情内容</p>'"></div>
+                <div class="rich-content-body prose prose-stone min-h-[260px] max-w-none rounded-[1.5rem] border border-bronze/10 bg-parchment/45 p-5" x-html="productForm.detail_html || '<p>暂无详情内容</p>'"></div>
             </div>
 
-            <div x-show="detailMode === 'edit'" class="mt-5" x-cloak>
+            <div x-show="detailMode === 'edit'" x-ref="detailEditorHost" class="rich-text-editor-host mt-5" x-cloak>
                 <textarea id="product-detail-editor-page" class="hidden"></textarea>
             </div>
         </section>
