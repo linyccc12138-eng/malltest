@@ -445,53 +445,93 @@
         }
     };
     const richTextFullscreenBodyClass = 'rich-text-fullscreen-active';
-    const richTextFullscreenCleanupMap = new WeakMap();
-    const releaseRichTextFullscreen = (editor) => {
-        const cleanup = richTextFullscreenCleanupMap.get(editor);
-        if (typeof cleanup === 'function') {
-            cleanup();
-            richTextFullscreenCleanupMap.delete(editor);
-        }
-    };
-    const lockRichTextFullscreenLayout = (editor, host) => {
+    const isRichTextEditorFullscreen = (editor) => {
         const container = editor?.getContainer?.();
-        const mountTarget = host || container;
-        if (!mountTarget) {
-            document.body.classList.add(richTextFullscreenBodyClass);
-            return () => {
-                document.body.classList.remove(richTextFullscreenBodyClass);
-            };
+        if (!container) {
+            return false;
         }
 
-        const existingCleanup = richTextFullscreenCleanupMap.get(editor);
-        if (typeof existingCleanup === 'function') {
-            existingCleanup();
-        }
+        return document.fullscreenElement === container || container.classList.contains('rich-text-editor-fallback-fullscreen');
+    };
+    const syncRichTextEditorFullscreen = (editor, host, viewportMode = 'ratio') => {
+        const container = editor?.getContainer?.();
+        const active = isRichTextEditorFullscreen(editor);
+        document.body.classList.toggle(richTextFullscreenBodyClass, active);
+        host?.classList.toggle('rich-text-editor-host--fullscreen', active);
+        container?.classList.toggle('rich-text-editor-native-fullscreen', active);
 
-        const originalParent = mountTarget.parentNode;
-        const originalNextSibling = mountTarget.nextSibling;
-        const placeholder = document.createComment(`rich-text-fullscreen:${editor.id || 'editor'}`);
-        if (originalParent) {
-            originalParent.insertBefore(placeholder, mountTarget);
-            document.body.appendChild(mountTarget);
-        }
-
-        document.body.classList.add(richTextFullscreenBodyClass);
-        const cleanup = () => {
-            if (placeholder.parentNode && mountTarget.parentNode === document.body) {
-                placeholder.parentNode.insertBefore(mountTarget, placeholder);
-                placeholder.remove();
-            } else if (originalParent && mountTarget.parentNode !== originalParent) {
-                if (originalNextSibling && originalNextSibling.parentNode === originalParent) {
-                    originalParent.insertBefore(mountTarget, originalNextSibling);
-                } else {
-                    originalParent.appendChild(mountTarget);
+        if (active) {
+            const height = Math.max(window.innerHeight, 840);
+            host?.style.setProperty('--rich-editor-height', `${height}px`);
+            if (container) {
+                container.style.height = `${height}px`;
+                container.style.minHeight = `${height}px`;
+            }
+            if (typeof editor.theme?.resizeTo === 'function') {
+                try {
+                    editor.theme.resizeTo(null, height);
+                } catch (error) {
+                    // noop
                 }
             }
-            document.body.classList.remove(richTextFullscreenBodyClass);
-        };
-        richTextFullscreenCleanupMap.set(editor, cleanup);
-        return cleanup;
+        } else {
+            applyRichTextEditorHeight(editor, host, viewportMode);
+        }
+    };
+    const requestRichTextEditorFullscreen = async (target) => {
+        if (!target) {
+            return false;
+        }
+
+        if (typeof target.requestFullscreen === 'function') {
+            await target.requestFullscreen();
+            return true;
+        }
+
+        const webkitRequestFullscreen = target.webkitRequestFullscreen || target.webkitEnterFullscreen;
+        if (typeof webkitRequestFullscreen === 'function') {
+            webkitRequestFullscreen.call(target);
+            return true;
+        }
+
+        return false;
+    };
+    const exitRichTextEditorFullscreen = async () => {
+        if (document.fullscreenElement && typeof document.exitFullscreen === 'function') {
+            await document.exitFullscreen();
+            return true;
+        }
+
+        if (typeof document.webkitExitFullscreen === 'function') {
+            document.webkitExitFullscreen();
+            return true;
+        }
+
+        return false;
+    };
+    const toggleRichTextEditorFullscreen = async (editor, host, viewportMode = 'ratio') => {
+        const container = editor?.getContainer?.();
+        if (!container) {
+            return;
+        }
+
+        if (isRichTextEditorFullscreen(editor)) {
+            container.classList.remove('rich-text-editor-fallback-fullscreen');
+            await exitRichTextEditorFullscreen();
+            syncRichTextEditorFullscreen(editor, host, viewportMode);
+            return;
+        }
+
+        container.classList.remove('rich-text-editor-fallback-fullscreen');
+        try {
+            const enteredNativeFullscreen = await requestRichTextEditorFullscreen(container);
+            if (!enteredNativeFullscreen) {
+                container.classList.add('rich-text-editor-fallback-fullscreen');
+            }
+        } catch (error) {
+            container.classList.add('rich-text-editor-fallback-fullscreen');
+        }
+        syncRichTextEditorFullscreen(editor, host, viewportMode);
     };
     const createRichTextEditor = async ({
         selector,
@@ -513,9 +553,8 @@
             selector,
             height: 840,
             menubar: false,
-            plugins: 'lists link image table code fullscreen',
-            toolbar: 'undo redo | styles | bold italic | alignleft aligncenter alignright | bullist numlist | image link table | fullscreen code',
-            fullscreen_native: true,
+            plugins: 'lists link image table code',
+            toolbar: 'undo redo | styles | bold italic | alignleft aligncenter alignright | bullist numlist | image link table | appfullscreen code',
             automatic_uploads: true,
             paste_data_images: true,
             convert_urls: false,
@@ -525,6 +564,39 @@
             promotion: false,
             content_style: richTextEditorContentStyle(),
             setup: (editor) => {
+                const getCurrentHost = () => getHost();
+                const getCurrentViewportMode = () => getViewportMode();
+                const notifyFullscreenStateChange = () => {
+                    editor.dispatch('RichTextFullscreenStateChange', {
+                        state: isRichTextEditorFullscreen(editor),
+                    });
+                };
+                editor.ui.registry.addToggleButton('appfullscreen', {
+                    icon: 'fullscreen',
+                    tooltip: '全屏',
+                    onAction: () => {
+                        toggleRichTextEditorFullscreen(editor, getCurrentHost(), getCurrentViewportMode())
+                            .finally(() => notifyFullscreenStateChange());
+                    },
+                    onSetup: (buttonApi) => {
+                        const refresh = () => {
+                            buttonApi.setActive(isRichTextEditorFullscreen(editor));
+                        };
+                        const handleFullscreenChange = () => {
+                            syncRichTextEditorFullscreen(editor, getCurrentHost(), getCurrentViewportMode());
+                            refresh();
+                        };
+                        editor.on('RichTextFullscreenStateChange', refresh);
+                        document.addEventListener('fullscreenchange', handleFullscreenChange);
+                        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+                        refresh();
+                        return () => {
+                            editor.off('RichTextFullscreenStateChange', refresh);
+                            document.removeEventListener('fullscreenchange', handleFullscreenChange);
+                            document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+                        };
+                    },
+                });
                 editor.on('init', () => {
                     editor.setContent(initialContent || '');
                     window.requestAnimationFrame(() => applyRichTextEditorHeight(editor, getHost(), getViewportMode()));
@@ -532,18 +604,11 @@
                 editor.on('change keyup input undo redo SetContent', () => {
                     onChange(editor.getContent());
                 });
-                editor.on('FullscreenStateChanged', (event) => {
-                    releaseRichTextFullscreen(editor);
-                    if (event.state) {
-                        window.requestAnimationFrame(() => {
-                            lockRichTextFullscreenLayout(editor, getHost());
-                        });
-                        return;
-                    }
-                    window.requestAnimationFrame(() => applyRichTextEditorHeight(editor, getHost(), getViewportMode()));
-                });
                 editor.on('remove', () => {
-                    releaseRichTextFullscreen(editor);
+                    const container = editor.getContainer?.();
+                    container?.classList.remove('rich-text-editor-fallback-fullscreen', 'rich-text-editor-native-fullscreen');
+                    document.body.classList.remove(richTextFullscreenBodyClass);
+                    getHost()?.classList.remove('rich-text-editor-host--fullscreen');
                 });
             },
             images_upload_handler: editorUploadHandler,

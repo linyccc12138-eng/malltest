@@ -133,7 +133,8 @@ textarea {
     min-height: calc(var(--rich-editor-height) - 52px);
 }
 
-.tox.tox-tinymce.tox-fullscreen {
+.tox.tox-tinymce.rich-text-editor-native-fullscreen,
+.tox.tox-tinymce.rich-text-editor-fallback-fullscreen {
     inset: 0 !important;
     z-index: 120 !important;
     width: 100vw !important;
@@ -143,7 +144,7 @@ textarea {
     border-radius: 0 !important;
 }
 
-.tox.tox-tinymce.tox-fullscreen:fullscreen {
+.tox.tox-tinymce.rich-text-editor-native-fullscreen:fullscreen {
     width: 100% !important;
     max-width: none !important;
     height: 100% !important;
@@ -153,7 +154,17 @@ body.rich-text-fullscreen-active {
     overflow: hidden;
 }
 
-body.rich-text-fullscreen-active .rich-text-editor-host {
+.rich-text-editor-host--fullscreen {
+    margin-top: 0 !important;
+    max-width: none !important;
+}
+
+.rich-text-editor-host--fullscreen .tox.tox-tinymce {
+    border-radius: 0 !important;
+}
+
+body.rich-text-fullscreen-active .rich-text-editor-host,
+body.rich-text-fullscreen-active .rich-text-editor-host--fullscreen {
     margin-top: 0 !important;
     max-width: none !important;
 }
@@ -166,11 +177,16 @@ body.rich-text-fullscreen-active .floating-cart-button {
     pointer-events: none;
 }
 
-body.rich-text-fullscreen-active .tox.tox-tinymce.tox-fullscreen,
-body.rich-text-fullscreen-active .tox.tox-tinymce.tox-fullscreen .tox-editor-container,
-body.rich-text-fullscreen-active .tox.tox-tinymce.tox-fullscreen .tox-sidebar-wrap,
-body.rich-text-fullscreen-active .tox.tox-tinymce.tox-fullscreen .tox-edit-area,
-body.rich-text-fullscreen-active .tox.tox-tinymce.tox-fullscreen iframe {
+body.rich-text-fullscreen-active .tox.tox-tinymce.rich-text-editor-native-fullscreen,
+body.rich-text-fullscreen-active .tox.tox-tinymce.rich-text-editor-native-fullscreen .tox-editor-container,
+body.rich-text-fullscreen-active .tox.tox-tinymce.rich-text-editor-native-fullscreen .tox-sidebar-wrap,
+body.rich-text-fullscreen-active .tox.tox-tinymce.rich-text-editor-native-fullscreen .tox-edit-area,
+body.rich-text-fullscreen-active .tox.tox-tinymce.rich-text-editor-native-fullscreen iframe,
+body.rich-text-fullscreen-active .tox.tox-tinymce.rich-text-editor-fallback-fullscreen,
+body.rich-text-fullscreen-active .tox.tox-tinymce.rich-text-editor-fallback-fullscreen .tox-editor-container,
+body.rich-text-fullscreen-active .tox.tox-tinymce.rich-text-editor-fallback-fullscreen .tox-sidebar-wrap,
+body.rich-text-fullscreen-active .tox.tox-tinymce.rich-text-editor-fallback-fullscreen .tox-edit-area,
+body.rich-text-fullscreen-active .tox.tox-tinymce.rich-text-editor-fallback-fullscreen iframe {
     min-height: 100vh !important;
 }
 
