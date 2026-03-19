@@ -77,7 +77,7 @@
     </script>
     <link rel="stylesheet" href="<?= asset('css/app.css') ?>">
     <link rel="icon" href="<?= asset('images/favicon.svg') ?>" type="image/svg+xml">
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="<?= asset('js/alpine.min.js') ?>"></script>
 </head>
 <body class="min-h-screen bg-aura font-body text-ink">
     <?php $currentUser = $currentUser ?? null; ?>
