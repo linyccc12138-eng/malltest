@@ -154,6 +154,33 @@
         }
         return '支付未完成';
     };
+    const adminOrderCanShip = (order = {}) => {
+        return (order?.status || '') === 'pending_shipment' && (order?.payment_status || '') === 'paid';
+    };
+    const adminOrderCanClose = (order = {}) => {
+        return ['pending_payment', 'pending_shipment'].includes(order?.status || '');
+    };
+    const orderReceiverAddress = (order = {}) => {
+        const direct = String(order?.receiver_address || '').trim();
+        if (direct) {
+            return direct;
+        }
+        const address = order?.address_snapshot || {};
+        return [address.province, address.city, address.district, address.detail_address]
+            .map((value) => String(value || '').trim())
+            .filter(Boolean)
+            .join(' ');
+    };
+    const orderItemSpecLabel = (item = {}) => {
+        const skuName = String(item?.sku_name || '').trim();
+        if (skuName) {
+            return skuName;
+        }
+        const attributes = Array.isArray(item?.attributes)
+            ? item.attributes
+            : Object.values(item?.attributes || {});
+        return attributes.map((value) => String(value || '').trim()).filter(Boolean).join(' / ');
+    };
 
     const fallbackBackPath = (pathname) => {
         if (pathname.startsWith('/mall/admin/products/edit')) {
@@ -849,6 +876,8 @@
     const defaultCategoryForm = () => ({ id: null, name: '', parent_id: '0', level: 1 });
     const defaultUserForm = () => ({ id: null, username: '', nickname: '', phone: '', password: '', membership_member_id: '', allow_duplicate_membership: false, status: 'active' });
     const defaultMemberForm = () => ({ id: null, fnumber: '', fname: '', fclassesid: '', fclassesname: '', initial_amount: 0, fbalance: 0, fmark: '', adjust_amount: '', adjust_mark: '' });
+    const defaultShipOrderForm = () => ({ id: null, order_no: '', shipping_company: '顺丰速运', shipping_no: '' });
+    const defaultCloseOrderForm = () => ({ id: null, order_no: '', reason: '管理后台关闭订单' });
 
     window.MallUtils = { formatMoney, notice, apiRequest, loadScriptOnce };
 
@@ -2413,6 +2442,10 @@
             draggedCategoryId: null,
             adminOrders: [],
             adminOrderGroup: 'all',
+            orderFilters: { keyword: '' },
+            orderDetail: null,
+            shipOrderForm: defaultShipOrderForm(),
+            closeOrderForm: defaultCloseOrderForm(),
             orderGroups: [
                 { key: 'all', label: '全部' },
                 { key: 'pending_payment', label: '待付款' },
@@ -2440,7 +2473,7 @@
             logLevelOptions: ['debug', 'info', 'warning', 'error'],
             logChannelOptions: [],
             logWatchSuspended: false,
-            modals: { category: false, user: false, member: false },
+            modals: { category: false, user: false, member: false, orderDetail: false, shipOrder: false, closeOrder: false },
             init() {
                 if (!this.tabs.find((tab) => tab.key === this.activeTab)) {
                     this.activeTab = 'dashboard';
@@ -2698,12 +2731,22 @@
                 this.orderPager = { ...this.orderPager, page: 1 };
                 void this.loadAdminOrders();
             },
+            applyOrderSearch() {
+                this.orderPager = { ...this.orderPager, page: 1 };
+                void this.loadAdminOrders();
+            },
+            resetOrderSearch() {
+                this.orderFilters.keyword = '';
+                this.orderPager = { ...this.orderPager, page: 1 };
+                void this.loadAdminOrders();
+            },
             async loadAdminOrders() {
                 try {
                     const query = new URLSearchParams({
                         group: this.adminOrderGroup,
                         page: this.orderPager.page,
                         page_size: this.orderPager.page_size,
+                        keyword: this.orderFilters.keyword.trim(),
                     }).toString();
                     const payload = await apiRequest(`/mall/api/admin/orders?${query}`);
                     this.adminOrders = payload.items || [];
@@ -2712,43 +2755,90 @@
                     notice(error.message, 'error');
                 }
             },
-            async ship(order) {
-                const shippingCompany = window.prompt('请输入物流公司', '顺丰速运');
-                if (!shippingCompany) {
-                    return;
-                }
-                const shippingNo = window.prompt('请输入运单号');
-                if (!shippingNo) {
+            openShipOrderModal(order) {
+                this.shipOrderForm = {
+                    id: Number(order?.id || 0) || null,
+                    order_no: String(order?.order_no || ''),
+                    shipping_company: '顺丰速运',
+                    shipping_no: '',
+                };
+                this.modals.shipOrder = true;
+            },
+            closeShipOrderModal() {
+                this.modals.shipOrder = false;
+                this.shipOrderForm = defaultShipOrderForm();
+            },
+            async submitShipOrder() {
+                if (!this.shipOrderForm.id) {
                     return;
                 }
 
                 try {
-                    await apiRequest(`/mall/api/admin/orders/${order.id}/ship`, {
+                    await apiRequest(`/mall/api/admin/orders/${this.shipOrderForm.id}/ship`, {
                         method: 'POST',
-                        body: { shipping_company: shippingCompany, shipping_no: shippingNo },
+                        body: {
+                            shipping_company: this.shipOrderForm.shipping_company,
+                            shipping_no: this.shipOrderForm.shipping_no,
+                        },
                     });
                     notice('订单已发货。');
+                    this.closeShipOrderModal();
                     await this.loadAdminOrders();
+                    if (this.modals.orderDetail && this.orderDetail?.id) {
+                        await this.viewAdminOrderDetail(this.orderDetail.id);
+                    }
                 } catch (error) {
                     notice(error.message, 'error');
                 }
             },
-            async closeAdminOrder(id) {
-                const reason = window.prompt('请输入关闭原因', '管理后台关闭订单');
-                if (!reason) {
+            openCloseOrderModal(order) {
+                this.closeOrderForm = {
+                    id: Number(order?.id || 0) || null,
+                    order_no: String(order?.order_no || ''),
+                    reason: '管理后台关闭订单',
+                };
+                this.modals.closeOrder = true;
+            },
+            closeCloseOrderModal() {
+                this.modals.closeOrder = false;
+                this.closeOrderForm = defaultCloseOrderForm();
+            },
+            async submitCloseOrder() {
+                if (!this.closeOrderForm.id) {
                     return;
                 }
 
                 try {
-                    await apiRequest(`/mall/api/admin/orders/${id}/close`, {
+                    await apiRequest(`/mall/api/admin/orders/${this.closeOrderForm.id}/close`, {
                         method: 'POST',
-                        body: { reason },
+                        body: { reason: this.closeOrderForm.reason },
                     });
                     notice('订单已关闭。');
+                    this.closeCloseOrderModal();
                     await this.loadAdminOrders();
+                    if (this.modals.orderDetail && this.orderDetail?.id) {
+                        await this.viewAdminOrderDetail(this.orderDetail.id);
+                    }
                 } catch (error) {
                     notice(error.message, 'error');
                 }
+            },
+            async viewAdminOrderDetail(orderOrId) {
+                const orderId = typeof orderOrId === 'object' ? Number(orderOrId?.id || 0) : Number(orderOrId || 0);
+                if (!orderId) {
+                    return;
+                }
+
+                try {
+                    this.orderDetail = await apiRequest(`/mall/api/admin/orders/${orderId}`);
+                    this.modals.orderDetail = true;
+                } catch (error) {
+                    notice(error.message, 'error');
+                }
+            },
+            closeOrderDetailModal() {
+                this.modals.orderDetail = false;
+                this.orderDetail = null;
             },
             async loadUsers() {
                 try {
@@ -2910,6 +3000,12 @@
                     notice(error.message, 'error');
                 }
             },
+            orderStatusLabel,
+            paymentMethodLabel,
+            adminOrderCanShip,
+            adminOrderCanClose,
+            orderReceiverAddress,
+            orderItemSpecLabel,
             async loadMembers() {
                 try {
                     const query = new URLSearchParams({

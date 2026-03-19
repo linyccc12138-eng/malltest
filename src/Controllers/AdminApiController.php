@@ -105,10 +105,33 @@ class AdminApiController extends BaseController
 
     public function users(Request $request, array $params = []): Response
     {
-        return $this->adminRespond(fn (): array => $this->users->listUsers(
-            (int) $request->input('page', 1),
-            (int) $request->input('page_size', 15)
-        ));
+        return $this->adminRespond(function () use ($request): array {
+            $payload = $this->users->listUsers(
+                (int) $request->input('page', 1),
+                (int) $request->input('page_size', 15)
+            );
+
+            $memberIds = array_values(array_unique(array_filter(array_map(
+                static fn (array $item): int => (int) ($item['membership_member_id'] ?? 0),
+                (array) ($payload['items'] ?? [])
+            ))));
+            $memberMap = $this->membership->getMembersByIds($memberIds);
+
+            $payload['items'] = array_map(function (array $item) use ($memberMap): array {
+                $memberId = (int) ($item['membership_member_id'] ?? 0);
+                $member = $memberMap[$memberId] ?? null;
+                $item['wechat_bound'] = (int) ($item['wechat_bound'] ?? 0) === 1;
+                $item['member_profile'] = $member ? [
+                    'id' => (int) ($member['fid'] ?? 0),
+                    'number' => (string) ($member['fnumber'] ?? ''),
+                    'nickname' => (string) ($member['fname'] ?? ''),
+                ] : null;
+                unset($item['openid']);
+                return $item;
+            }, (array) ($payload['items'] ?? []));
+
+            return $payload;
+        });
     }
 
     public function saveUser(Request $request, array $params = []): Response
@@ -192,8 +215,14 @@ class AdminApiController extends BaseController
         return $this->adminRespond(fn (): array => $this->orders->adminOrders(
             (string) $request->input('group', 'all'),
             (int) $request->input('page', 1),
-            (int) $request->input('page_size', 15)
+            (int) $request->input('page_size', 15),
+            (string) $request->input('keyword', '')
         ));
+    }
+
+    public function orderDetail(Request $request, array $params = []): Response
+    {
+        return $this->adminRespond(fn (): array => $this->orders->adminOrderDetail((int) ($params['id'] ?? 0)));
     }
 
     public function shipOrder(Request $request, array $params = []): Response

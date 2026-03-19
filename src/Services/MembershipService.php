@@ -115,6 +115,40 @@ class MembershipService
         return $row ?: null;
     }
 
+    public function getMembersByIds(array $memberIds): array
+    {
+        $normalizedIds = array_values(array_unique(array_filter(array_map('intval', $memberIds), static fn (int $id): bool => $id > 0)));
+        if ($normalizedIds === []) {
+            return [];
+        }
+
+        $placeholders = [];
+        $bindings = [];
+        foreach ($normalizedIds as $index => $memberId) {
+            $key = ':fid_' . $index;
+            $placeholders[] = $key;
+            $bindings[$key] = $memberId;
+        }
+
+        $stmt = $this->membershipPdo()->prepare(
+            'SELECT m.fid, m.fnumber, m.fname, m.fclassesid, m.fclassesname, m.faccruedamount, m.fbalance, m.fmark, c.foff
+             FROM member m
+             LEFT JOIN classes c ON c.fid = m.fclassesid
+             WHERE m.fid IN (' . implode(', ', $placeholders) . ')'
+        );
+        foreach ($bindings as $key => $value) {
+            $stmt->bindValue($key, $value, PDO::PARAM_INT);
+        }
+        $stmt->execute();
+
+        $rows = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $rows[(int) ($row['fid'] ?? 0)] = $row;
+        }
+
+        return $rows;
+    }
+
     public function getMallUserMember(int $userId): ?array
     {
         $stmt = $this->db->mall()->prepare('SELECT membership_member_id FROM mall_users WHERE id = :id');

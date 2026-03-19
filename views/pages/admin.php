@@ -170,42 +170,84 @@
     </div>
 
     <div x-show="activeTab === 'orders'" class="rounded-[1.8rem] border border-bronze/10 bg-white/80 p-5 shadow-card" x-cloak>
-        <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex flex-wrap gap-2">
-                <template x-for="group in orderGroups" :key="group.key">
-                    <button
-                        @click="switchAdminOrderGroup(group.key)"
-                        :class="adminOrderGroup === group.key ? 'bg-bronze text-white' : 'border border-bronze/15 bg-parchment/55 text-ink'"
-                        class="rounded-full px-4 py-2 text-sm"
-                        x-text="group.label"
-                    ></button>
-                </template>
-            </div>
-            <label class="flex items-center gap-2 text-sm text-ink/60">
-                每页
-                <select x-model="orderPager.page_size" @change="setPagerSize('orderPager', orderPager.page_size, 'loadAdminOrders')" class="rounded-full border-bronze/15 bg-parchment/55 pr-8">
-                    <template x-for="size in pageSizeOptions" :key="`admin-order-size-${size}`">
-                        <option :value="size" x-text="`${size} 条`"></option>
+        <div class="flex flex-col gap-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex flex-wrap gap-2">
+                    <template x-for="group in orderGroups" :key="group.key">
+                        <button
+                            @click="switchAdminOrderGroup(group.key)"
+                            :class="adminOrderGroup === group.key ? 'bg-bronze text-white' : 'border border-bronze/15 bg-parchment/55 text-ink'"
+                            class="rounded-full px-4 py-2 text-sm"
+                            x-text="group.label"
+                        ></button>
                     </template>
-                </select>
-            </label>
+                </div>
+                <label class="flex items-center gap-2 text-sm text-ink/60">
+                    每页
+                    <select x-model="orderPager.page_size" @change="setPagerSize('orderPager', orderPager.page_size, 'loadAdminOrders')" class="rounded-full border-bronze/15 bg-parchment/55 pr-8">
+                        <template x-for="size in pageSizeOptions" :key="`admin-order-size-${size}`">
+                            <option :value="size" x-text="`${size} 条`"></option>
+                        </template>
+                    </select>
+                </label>
+            </div>
+
+            <div class="flex flex-col gap-3 rounded-[1.4rem] border border-bronze/10 bg-parchment/45 p-4 sm:flex-row sm:items-center">
+                <label class="block flex-1 text-sm text-ink/70">
+                    搜索订单
+                    <input
+                        x-model="orderFilters.keyword"
+                        @keydown.enter.prevent="applyOrderSearch()"
+                        type="text"
+                        class="mt-2 w-full rounded-2xl border-bronze/15 bg-white/80"
+                        placeholder="输入用户昵称、用户手机号或收货人姓名"
+                    >
+                </label>
+                <div class="flex gap-2 sm:self-end">
+                    <button @click="applyOrderSearch()" type="button" class="rounded-full bg-bronze px-4 py-2 text-sm text-white">搜索</button>
+                    <button @click="resetOrderSearch()" type="button" class="rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">重置</button>
+                </div>
+            </div>
         </div>
 
         <div class="mt-5 space-y-4">
             <template x-for="order in adminOrders" :key="order.id">
                 <article class="rounded-[1.4rem] border border-bronze/10 bg-parchment/55 p-4">
-                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                            <div class="font-medium text-ink" x-text="order.order_no"></div>
-                            <div class="mt-1 text-sm text-ink/55">
-                                用户 ID <span x-text="order.user_id"></span>
-                                <span class="mx-1">/</span>
-                                状态 <span x-text="order.status"></span>
+                    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div class="min-w-0 flex-1 space-y-2">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <div class="font-medium text-ink" x-text="order.order_no"></div>
+                                <span
+                                    :class="adminOrderCanClose(order) ? 'bg-bronze/10 text-bronze' : 'bg-sage/10 text-sage'"
+                                    class="rounded-full px-2.5 py-1 text-xs"
+                                    x-text="orderStatusLabel(order)"
+                                ></span>
+                            </div>
+                            <div class="grid gap-2 text-sm text-ink/60 md:grid-cols-2">
+                                <div>用户昵称：<span class="text-ink" x-text="order.user_nickname || '未命名用户'"></span></div>
+                                <div>用户手机号：<span class="text-ink" x-text="order.user_phone || '未填写'"></span></div>
+                                <div>收货人姓名：<span class="text-ink" x-text="order.receiver_name || '未填写'"></span></div>
+                                <div>下单时间：<span class="text-ink" x-text="order.placed_at || '未知'"></span></div>
+                            </div>
+                            <div class="text-sm text-ink/60">
+                                收货地址：<span class="text-ink" x-text="orderReceiverAddress(order) || '未填写地址'"></span>
+                            </div>
+                            <div class="text-sm text-ink/60">
+                                订单金额：<span class="font-medium text-bronze">¥<span x-text="formatMoney(order.payable_amount)"></span></span>
                             </div>
                         </div>
-                        <div class="flex gap-2">
-                            <button @click="ship(order)" class="rounded-full border border-teal/15 px-3 py-2 text-xs text-teal">发货</button>
-                            <button @click="closeAdminOrder(order.id)" class="rounded-full border border-rose/20 px-3 py-2 text-xs text-rose">关闭</button>
+                        <div class="flex flex-wrap gap-2">
+                            <button @click="viewAdminOrderDetail(order)" class="rounded-full border border-bronze/15 px-3 py-2 text-xs text-bronze">查看详情</button>
+                            <button
+                                x-show="adminOrderCanShip(order)"
+                                @click="openShipOrderModal(order)"
+                                class="rounded-full border border-teal/15 px-3 py-2 text-xs text-teal"
+                            >发货</button>
+                            <button
+                                x-show="adminOrderCanClose(order)"
+                                @click="openCloseOrderModal(order)"
+                                class="rounded-full border border-rose/20 px-3 py-2 text-xs text-rose"
+                            >关闭</button>
                         </div>
                     </div>
                 </article>
@@ -267,10 +309,16 @@
                                 <div class="mt-1 text-sm text-ink/55">
                                     手机号 <span x-text="item.phone || '未填写'"></span>
                                     <span class="mx-1">/</span>
-                                    OpenID <span x-text="item.openid || '未绑定'"></span>
+                                    微信 <span x-text="item.wechat_bound ? '已绑定' : '未绑定'"></span>
                                 </div>
                                 <div class="mt-1 text-sm text-ink/55">
-                                    会员 ID <span x-text="item.membership_member_id || '未绑定'"></span>
+                                    绑定会员
+                                    <span x-show="item.member_profile" class="text-ink">
+                                        <span x-text="item.member_profile?.nickname || ''"></span>
+                                        <span class="mx-1">/</span>
+                                        <span x-text="item.member_profile?.number || ''"></span>
+                                    </span>
+                                    <span x-show="!item.member_profile">未绑定</span>
                                 </div>
                             </div>
                             <div class="flex flex-wrap justify-end gap-2">
@@ -689,6 +737,120 @@
                     <div class="flex justify-end gap-2">
                         <button type="button" @click="closeMemberModal()" class="rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">取消</button>
                         <button type="submit" class="rounded-full bg-sage px-4 py-2 text-sm text-white">保存会员</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </template>
+
+    <template x-teleport="body">
+        <div x-show="modals.orderDetail" x-cloak x-transition.opacity.duration.180ms class="modal-overlay" @click.self="closeOrderDetailModal()">
+            <div x-transition.scale.opacity.duration.220ms class="modal-panel w-full max-w-4xl overflow-y-auto rounded-[1.9rem] border border-bronze/10 bg-white/95 p-6 shadow-glow">
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <h3 class="font-display text-2xl text-ink">订单详情</h3>
+                        <p class="mt-1 text-sm text-ink/55" x-text="orderDetail?.order_no || ''"></p>
+                    </div>
+                    <button @click="closeOrderDetailModal()" type="button" class="rounded-full border border-bronze/15 px-3 py-2 text-sm text-bronze">关闭</button>
+                </div>
+
+                <div class="mt-5 grid gap-4 md:grid-cols-2">
+                    <div class="rounded-[1.4rem] border border-bronze/10 bg-parchment/45 p-4">
+                        <div class="space-y-2 text-sm text-ink/65">
+                            <div>订单状态：<span class="text-ink" x-text="orderStatusLabel(orderDetail || {})"></span></div>
+                            <div>支付方式：<span class="text-ink" x-text="paymentMethodLabel(orderDetail || {})"></span></div>
+                            <div>下单时间：<span class="text-ink" x-text="orderDetail?.placed_at || '未知'"></span></div>
+                            <div>订单金额：<span class="font-medium text-bronze">¥<span x-text="formatMoney(orderDetail?.payable_amount || 0)"></span></span></div>
+                        </div>
+                    </div>
+                    <div class="rounded-[1.4rem] border border-bronze/10 bg-parchment/45 p-4">
+                        <div class="space-y-2 text-sm text-ink/65">
+                            <div>用户昵称：<span class="text-ink" x-text="orderDetail?.user_nickname || '未命名用户'"></span></div>
+                            <div>用户手机号：<span class="text-ink" x-text="orderDetail?.user_phone || '未填写'"></span></div>
+                            <div>收货人：<span class="text-ink" x-text="orderDetail?.receiver_name || '未填写'"></span></div>
+                            <div>收货地址：<span class="text-ink" x-text="orderReceiverAddress(orderDetail || {}) || '未填写地址'"></span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-5 rounded-[1.4rem] border border-bronze/10 bg-white/80 p-4">
+                    <div class="font-medium text-ink">商品清单</div>
+                    <div class="mt-4 space-y-3">
+                        <template x-for="item in (orderDetail?.items || [])" :key="item.id">
+                            <div class="flex gap-4 rounded-[1.2rem] border border-bronze/10 bg-parchment/45 p-3">
+                                <div class="h-20 w-20 shrink-0 overflow-hidden rounded-[1rem] border border-bronze/10 bg-white">
+                                    <template x-if="item.cover_image">
+                                        <img :src="item.cover_image" alt="订单商品图片" class="h-full w-full object-cover">
+                                    </template>
+                                    <template x-if="!item.cover_image">
+                                        <div class="flex h-full w-full items-center justify-center text-xs text-ink/35">暂无图片</div>
+                                    </template>
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <div class="font-medium text-ink" x-text="item.product_name"></div>
+                                    <div class="mt-1 text-sm text-ink/55" x-text="orderItemSpecLabel(item) || '默认规格'"></div>
+                                    <div class="mt-2 text-sm text-ink/55">
+                                        数量 <span x-text="item.quantity"></span>
+                                        <span class="mx-1">/</span>
+                                        单价 ¥<span x-text="formatMoney(item.final_unit_price)"></span>
+                                        <span class="mx-1">/</span>
+                                        小计 ¥<span x-text="formatMoney(item.line_total)"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <template x-teleport="body">
+        <div x-show="modals.shipOrder" x-cloak x-transition.opacity.duration.180ms class="modal-overlay" @click.self="closeShipOrderModal()">
+            <div x-transition.scale.opacity.duration.220ms class="modal-panel w-full max-w-xl overflow-y-auto rounded-[1.9rem] border border-bronze/10 bg-white/95 p-6 shadow-glow">
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <h3 class="font-display text-2xl text-ink">订单发货</h3>
+                        <p class="mt-1 text-sm text-ink/55" x-text="shipOrderForm.order_no || ''"></p>
+                    </div>
+                    <button @click="closeShipOrderModal()" type="button" class="rounded-full border border-bronze/15 px-3 py-2 text-sm text-bronze">关闭</button>
+                </div>
+                <form @submit.prevent="submitShipOrder()" class="mt-5 space-y-4">
+                    <label class="block text-sm text-ink/70">
+                        物流公司
+                        <input x-model="shipOrderForm.shipping_company" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" required>
+                    </label>
+                    <label class="block text-sm text-ink/70">
+                        运单号
+                        <input x-model="shipOrderForm.shipping_no" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" required>
+                    </label>
+                    <div class="flex justify-end gap-2">
+                        <button type="button" @click="closeShipOrderModal()" class="rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">取消</button>
+                        <button type="submit" class="rounded-full bg-teal px-4 py-2 text-sm text-white">确认发货</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </template>
+
+    <template x-teleport="body">
+        <div x-show="modals.closeOrder" x-cloak x-transition.opacity.duration.180ms class="modal-overlay" @click.self="closeCloseOrderModal()">
+            <div x-transition.scale.opacity.duration.220ms class="modal-panel w-full max-w-xl overflow-y-auto rounded-[1.9rem] border border-bronze/10 bg-white/95 p-6 shadow-glow">
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <h3 class="font-display text-2xl text-ink">关闭订单</h3>
+                        <p class="mt-1 text-sm text-ink/55" x-text="closeOrderForm.order_no || ''"></p>
+                    </div>
+                    <button @click="closeCloseOrderModal()" type="button" class="rounded-full border border-bronze/15 px-3 py-2 text-sm text-bronze">关闭</button>
+                </div>
+                <form @submit.prevent="submitCloseOrder()" class="mt-5 space-y-4">
+                    <label class="block text-sm text-ink/70">
+                        关闭原因
+                        <textarea x-model="closeOrderForm.reason" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" required></textarea>
+                    </label>
+                    <div class="flex justify-end gap-2">
+                        <button type="button" @click="closeCloseOrderModal()" class="rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">取消</button>
+                        <button type="submit" class="rounded-full bg-rose px-4 py-2 text-sm text-white">确认关闭</button>
                     </div>
                 </form>
             </div>

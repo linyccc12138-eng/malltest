@@ -214,7 +214,9 @@ class UserService
         $total = (int) (($countStmt->fetch()['total'] ?? 0));
 
         $stmt = $this->db->mall()->prepare(
-            'SELECT id, username, nickname, phone, role, openid, membership_member_id, status, last_login_at, created_at
+            'SELECT id, username, nickname, phone, role,
+                    CASE WHEN openid IS NOT NULL AND openid <> \'\' THEN 1 ELSE 0 END AS wechat_bound,
+                    membership_member_id, status, last_login_at, created_at
              FROM mall_users
              ORDER BY id DESC
              LIMIT :limit OFFSET :offset'

@@ -427,10 +427,22 @@ class OrderService
         return $this->listOrders(['user_id' => $userId, 'group' => $group, 'page' => $page, 'page_size' => $pageSize]);
     }
 
-    public function adminOrders(string $group = 'all', int $page = 1, int $pageSize = 15): array
+    public function adminOrders(string $group = 'all', int $page = 1, int $pageSize = 15, string $keyword = ''): array
     {
         $this->closeExpiredOrders();
-        return $this->listOrders(['group' => $group, 'page' => $page, 'page_size' => $pageSize]);
+        return $this->listOrders(['group' => $group, 'page' => $page, 'page_size' => $pageSize, 'keyword' => $keyword]);
+    }
+
+    public function adminOrderDetail(int $orderId): array
+    {
+        $this->closeExpiredOrders();
+        $order = $this->findOrder($orderId, null, true);
+        if (!$order) {
+            throw new \RuntimeException('订单不存在。');
+        }
+
+        $enriched = $this->enrichOrdersForAdmin([$order]);
+        return $enriched[0] ?? $order;
     }
 
     public function cancelOrder(int $userId, int $orderId): array
@@ -807,9 +819,10 @@ class OrderService
         $page = max(1, (int) ($filters['page'] ?? 1));
         $pageSize = max(1, min(100, (int) ($filters['page_size'] ?? 15)));
         $offset = ($page - 1) * $pageSize;
+        $joins = '';
 
         if (!empty($filters['user_id'])) {
-            $where[] = 'user_id = :user_id';
+            $where[] = 'o.user_id = :user_id';
             $params[':user_id'] = (int) $filters['user_id'];
         }
 
@@ -831,18 +844,31 @@ class OrderService
                 $placeholders[] = $key;
                 $params[$key] = $status;
             }
-            $where[] = 'status IN (' . implode(', ', $placeholders) . ')';
+            $where[] = 'o.status IN (' . implode(', ', $placeholders) . ')';
+        }
+
+        $keyword = trim((string) ($filters['keyword'] ?? ''));
+        if ($keyword !== '') {
+            $joins .= ' LEFT JOIN mall_users u ON u.id = o.user_id';
+            $where[] = '(
+                u.nickname LIKE :keyword_nickname
+                OR u.phone LIKE :keyword_phone
+                OR JSON_UNQUOTE(JSON_EXTRACT(o.address_snapshot_json, \'$.receiver_name\')) LIKE :keyword_receiver
+            )';
+            $params[':keyword_nickname'] = '%' . $keyword . '%';
+            $params[':keyword_phone'] = '%' . $keyword . '%';
+            $params[':keyword_receiver'] = '%' . $keyword . '%';
         }
 
         $whereSql = implode(' AND ', $where);
-        $countStmt = $this->db->mall()->prepare('SELECT COUNT(*) AS total FROM orders WHERE ' . $whereSql);
+        $countStmt = $this->db->mall()->prepare('SELECT COUNT(*) AS total FROM orders o' . $joins . ' WHERE ' . $whereSql);
         foreach ($params as $key => $value) {
             $countStmt->bindValue($key, $value);
         }
         $countStmt->execute();
         $total = (int) (($countStmt->fetch()['total'] ?? 0));
 
-        $stmt = $this->db->mall()->prepare('SELECT * FROM orders WHERE ' . $whereSql . ' ORDER BY id DESC LIMIT :limit OFFSET :offset');
+        $stmt = $this->db->mall()->prepare('SELECT o.* FROM orders o' . $joins . ' WHERE ' . $whereSql . ' ORDER BY o.id DESC LIMIT :limit OFFSET :offset');
         foreach ($params as $key => $value) {
             $stmt->bindValue($key, $value);
         }
@@ -851,14 +877,7 @@ class OrderService
         $stmt->execute();
         $rows = $stmt->fetchAll();
 
-        $items = array_map(function (array $order): array {
-            $order['subtotal_amount'] = (float) $order['subtotal_amount'];
-            $order['discount_amount'] = (float) $order['discount_amount'];
-            $order['payable_amount'] = (float) $order['payable_amount'];
-            $order['paid_amount'] = (float) $order['paid_amount'];
-            $order['address_snapshot'] = json_decode((string) ($order['address_snapshot_json'] ?? '[]'), true) ?: [];
-            return $order;
-        }, $rows);
+        $items = $this->enrichOrdersForAdmin($rows);
 
         return [
             'items' => $items,
@@ -869,6 +888,77 @@ class OrderService
                 'total_pages' => max(1, (int) ceil($total / $pageSize)),
             ],
         ];
+    }
+
+    private function enrichOrdersForAdmin(array $orders): array
+    {
+        if ($orders === []) {
+            return [];
+        }
+
+        $userIds = array_values(array_unique(array_map(static fn (array $order): int => (int) ($order['user_id'] ?? 0), $orders)));
+        $userMap = $this->fetchUsersByIds($userIds);
+
+        return array_map(function (array $order) use ($userMap): array {
+            $order['subtotal_amount'] = (float) $order['subtotal_amount'];
+            $order['discount_amount'] = (float) $order['discount_amount'];
+            $order['payable_amount'] = (float) $order['payable_amount'];
+            $order['paid_amount'] = (float) $order['paid_amount'];
+            $order['address_snapshot'] = json_decode((string) ($order['address_snapshot_json'] ?? '[]'), true) ?: [];
+            $address = is_array($order['address_snapshot']) ? $order['address_snapshot'] : [];
+            $user = $userMap[(int) ($order['user_id'] ?? 0)] ?? [];
+            $order['user_nickname'] = (string) ($user['nickname'] ?? $user['username'] ?? '');
+            $order['user_phone'] = (string) ($user['phone'] ?? '');
+            $order['receiver_name'] = (string) ($address['receiver_name'] ?? '');
+            $order['receiver_phone'] = (string) ($address['receiver_phone'] ?? '');
+            $order['receiver_address'] = $this->formatAddressSnapshot($address);
+            return $order;
+        }, $orders);
+    }
+
+    private function fetchUsersByIds(array $userIds): array
+    {
+        $normalizedIds = array_values(array_unique(array_filter(array_map('intval', $userIds), static fn (int $id): bool => $id > 0)));
+        if ($normalizedIds === []) {
+            return [];
+        }
+
+        $placeholders = [];
+        $bindings = [];
+        foreach ($normalizedIds as $index => $userId) {
+            $key = ':user_' . $index;
+            $placeholders[] = $key;
+            $bindings[$key] = $userId;
+        }
+
+        $stmt = $this->db->mall()->prepare(
+            'SELECT id, username, nickname, phone
+             FROM mall_users
+             WHERE id IN (' . implode(', ', $placeholders) . ')'
+        );
+        foreach ($bindings as $key => $value) {
+            $stmt->bindValue($key, $value, PDO::PARAM_INT);
+        }
+        $stmt->execute();
+
+        $rows = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $rows[(int) ($row['id'] ?? 0)] = $row;
+        }
+
+        return $rows;
+    }
+
+    private function formatAddressSnapshot(array $address): string
+    {
+        $parts = [
+            trim((string) ($address['province'] ?? '')),
+            trim((string) ($address['city'] ?? '')),
+            trim((string) ($address['district'] ?? '')),
+            trim((string) ($address['detail_address'] ?? '')),
+        ];
+
+        return trim(implode(' ', array_values(array_filter($parts, static fn (string $value): bool => $value !== ''))));
     }
     private function closeOrderInternal(int $orderId, string $closedReason, string $logReason): void
     {

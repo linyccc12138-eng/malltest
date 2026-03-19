@@ -145,6 +145,7 @@ $router->post('/mall/api/admin/members', [$adminApiController, 'saveMember']);
 $router->put('/mall/api/admin/members/{id}', [$adminApiController, 'saveMember']);
 $router->post('/mall/api/admin/members/{id}/balance', [$adminApiController, 'adjustMemberBalance']);
 $router->get('/mall/api/admin/orders', [$adminApiController, 'orders']);
+$router->get('/mall/api/admin/orders/{id}', [$adminApiController, 'orderDetail']);
 $router->post('/mall/api/admin/orders/{id}/ship', [$adminApiController, 'shipOrder']);
 $router->post('/mall/api/admin/orders/{id}/close', [$adminApiController, 'closeOrder']);
 $router->get('/mall/api/admin/settings', [$adminApiController, 'settings']);
