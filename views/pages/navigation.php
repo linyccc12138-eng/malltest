@@ -12,14 +12,10 @@ $courses = $navData['recommended_courses'] ?? [];
             </div>
             <div class="hidden h-20 w-20 rounded-full border border-bronze/20 bg-parchment/80 sm:flex sm:items-center sm:justify-center sm:text-bronze sm:shadow-card">妙</div>
         </div>
-        <p class="max-w-3xl text-sm leading-7 text-ink/70 sm:text-base">
-            导航页延续商城的穆夏风格，作为微信网页入口聚合奇妙集市、知识星球、热门活动、商品上新和推荐课程。
-            管理员可在后台维护活动内容、推荐商品与课程展示位。
-        </p>
         <div class="mt-8 grid grid-cols-2 gap-3 sm:gap-4">
             <a href="/mall" class="group rounded-[1.6rem] border border-bronze/25 bg-parchment/80 p-4 shadow-card transition duration-300 hover:-translate-y-1 hover:border-bronze hover:shadow-glow sm:p-5">
                 <div class="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-bronze/10 text-2xl text-bronze">市</div>
-                <h2 class="font-display text-xl text-ink sm:text-2xl">奇妙集市</h2>
+                <h2 class="font-display text-xl text-ink sm:text-2xl">神奇喵喵屋</h2>
                 <p class="mt-2 text-sm text-ink/65">进入电商商城，浏览商品、课程、会员折扣与购物流程。</p>
             </a>
             <a href="https://magic.lyccc.xyz/login" target="_blank" rel="noreferrer" class="group rounded-[1.6rem] border border-teal/25 bg-white/85 p-4 shadow-card transition duration-300 hover:-translate-y-1 hover:border-teal hover:shadow-glow sm:p-5">
@@ -39,9 +35,9 @@ $courses = $navData['recommended_courses'] ?? [];
             <div class="space-y-4">
                 <?php foreach ($activities as $activity): ?>
                     <a href="/mall/activities/<?= (int) $activity['id'] ?>" class="flex items-center gap-3 rounded-[1.4rem] border border-bronze/10 bg-parchment/70 p-4 transition hover:border-bronze/20 hover:bg-parchment/85">
-                        <div class="h-20 w-20 overflow-hidden rounded-[1.2rem] border border-bronze/10 bg-white">
+                        <div class="h-20 w-20 rounded-[1.2rem] bg-cover bg-center"<?= !empty($activity['thumbnail_image']) ? ' style="background-image:url(\'' . htmlspecialchars($activity['thumbnail_image'], ENT_QUOTES, 'UTF-8') . '\')"' : '' ?>>
                             <?php if (!empty($activity['thumbnail_image'])): ?>
-                                <img src="<?= htmlspecialchars($activity['thumbnail_image'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8') ?>" class="h-full w-full object-cover">
+                                <span class="sr-only"><?= htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8') ?></span>
                             <?php else: ?>
                                 <div class="flex h-full w-full items-center justify-center text-xs text-ink/40">暂无缩略图</div>
                             <?php endif; ?>

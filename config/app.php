@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 return [
-    'name' => env('APP_NAME', '奇妙集市'),
+    'name' => env('APP_NAME', '神奇喵喵屋'),
     'env' => env('APP_ENV', 'development'),
     'debug' => env('APP_DEBUG', 'false') === 'true',
     'url' => env('APP_URL', 'http://localhost:8000'),

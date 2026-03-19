@@ -4,7 +4,7 @@
     <?php
     $shareMeta = is_array($shareMeta ?? null) ? $shareMeta : [];
     $metaTitle = (string) ($shareMeta['title'] ?? ($pageTitle ?? $appName));
-    $metaDescription = trim((string) ($shareMeta['description'] ?? '奇妙集市微信网页商城，支持会员联动、余额支付、微信支付、用户中心与管理后台。'));
+    $metaDescription = trim((string) ($shareMeta['description'] ?? 'Sherry 的精选分享，集中展示精选商品、活动与课程内容。'));
     $metaUrl = (string) ($shareMeta['url'] ?? '');
     $metaImage = (string) ($shareMeta['image'] ?? '');
     $metaType = (string) ($shareMeta['type'] ?? 'website');
@@ -93,7 +93,7 @@
                         <span class="text-sm font-bold text-bronze md:text-lg">妙</span>
                     </div>
                     <div>
-                        <div class="font-display text-base tracking-[0.16em] text-bronze md:text-lg md:tracking-[0.2em]">奇妙集市</div>
+                        <div class="font-display text-base tracking-[0.16em] text-bronze md:text-lg md:tracking-[0.2em]">神奇喵喵屋</div>
                         <div class="text-[10px] text-ink/60 md:text-xs">会员联动电商网站</div>
                     </div>
                 </a>
@@ -141,8 +141,7 @@
 
     <footer class="border-t border-bronze/10 bg-white/60">
         <div class="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-6 text-sm text-ink/60 lg:flex-row lg:items-center lg:justify-between lg:px-6">
-            <div>奇妙集市 · 微信网页商城 · 会员系统联动</div>
-            <div>支持游客浏览，登录后可使用购物车、下单、地址管理、余额支付与微信绑定功能。</div>
+            <div>联系微信：Serendipity4869</div>
         </div>
     </footer>
 
@@ -152,7 +151,7 @@
             'csrfToken' => $csrfToken ?? '',
             'currentUser' => $currentUser,
             'currentMember' => $currentMember ?? null,
-            'appName' => $appName ?? '奇妙集市',
+            'appName' => $appName ?? '神奇喵喵屋',
         ]) ?>;
     </script>
     <button type="button" data-back-to-top class="back-top-button" aria-label="返回顶部">↑</button>

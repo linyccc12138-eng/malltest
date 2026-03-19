@@ -336,9 +336,27 @@ class AdminApiController extends BaseController
     {
         return $this->adminRespond(function () use ($request): array {
             $this->validateCsrf($request);
-            $this->users->requireAdmin();
+            $admin = $this->users->requireAdmin();
+            $logger = $this->app->make('logger');
+            $file = $request->files['file'] ?? [];
+            $uploadError = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
 
-            if (empty($request->files['file']['tmp_name'])) {
+            if ($uploadError !== UPLOAD_ERR_OK) {
+                $logger->warning('admin_upload', '后台图片上传失败', [
+                    'reason' => 'php_upload_error',
+                    'upload_error' => $uploadError,
+                    'source_name' => (string) ($file['name'] ?? ''),
+                    'content_length' => (int) ($request->server['CONTENT_LENGTH'] ?? 0),
+                ], (int) $admin['id'], $request);
+                throw new \RuntimeException($this->uploadErrorMessage($uploadError));
+            }
+
+            if (empty($file['tmp_name'])) {
+                $logger->warning('admin_upload', '后台图片上传失败', [
+                    'reason' => 'missing_tmp_file',
+                    'source_name' => (string) ($file['name'] ?? ''),
+                    'content_length' => (int) ($request->server['CONTENT_LENGTH'] ?? 0),
+                ], (int) $admin['id'], $request);
                 throw new \RuntimeException('未接收到上传文件。');
             }
 
@@ -347,7 +365,7 @@ class AdminApiController extends BaseController
                 throw new \RuntimeException('创建上传目录失败，请检查目录权限。');
             }
 
-            $extension = pathinfo((string) $request->files['file']['name'], PATHINFO_EXTENSION) ?: 'png';
+            $extension = pathinfo((string) $file['name'], PATHINFO_EXTENSION) ?: 'png';
             $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
             $extension = strtolower($extension);
             if (!in_array($extension, $allowedExtensions, true)) {
@@ -356,12 +374,38 @@ class AdminApiController extends BaseController
 
             $filename = 'editor-' . date('YmdHis') . '-' . random_int(1000, 9999) . '.' . strtolower($extension);
             $destination = $uploadDir . '/' . $filename;
-            if (!move_uploaded_file($request->files['file']['tmp_name'], $destination)) {
+            if (!move_uploaded_file((string) $file['tmp_name'], $destination)) {
+                $logger->warning('admin_upload', '后台图片上传失败', [
+                    'reason' => 'move_uploaded_file_failed',
+                    'source_name' => (string) ($file['name'] ?? ''),
+                    'target_name' => $filename,
+                    'content_length' => (int) ($request->server['CONTENT_LENGTH'] ?? 0),
+                ], (int) $admin['id'], $request);
                 throw new \RuntimeException('保存上传文件失败，请检查目录权限。');
             }
 
+            $logger->info('admin_upload', '后台图片上传成功', [
+                'source_name' => (string) ($file['name'] ?? ''),
+                'target_name' => $filename,
+                'extension' => $extension,
+                'size' => (int) ($file['size'] ?? 0),
+                'location' => '/mall/uploads/' . $filename,
+            ], (int) $admin['id'], $request);
+
             return ['location' => '/mall/uploads/' . $filename];
         });
+    }
+
+    private function uploadErrorMessage(int $uploadError): string
+    {
+        return match ($uploadError) {
+            UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => '上传图片过大，请压缩后重试。',
+            UPLOAD_ERR_PARTIAL => '图片上传未完成，请重试。',
+            UPLOAD_ERR_NO_TMP_DIR => '服务器缺少临时目录，请联系管理员处理。',
+            UPLOAD_ERR_CANT_WRITE => '服务器写入上传文件失败，请联系管理员处理。',
+            UPLOAD_ERR_EXTENSION => '图片上传被服务器扩展拦截，请联系管理员处理。',
+            default => '未接收到上传文件。',
+        };
     }
 
     private function adminRespond(callable $callback): Response

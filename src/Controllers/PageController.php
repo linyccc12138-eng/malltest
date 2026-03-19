@@ -43,7 +43,7 @@ class PageController extends BaseController
         $member = $user ? $this->membership->getMallUserMember((int) $user['id']) : null;
 
         return $this->view('pages/mall-home', [
-            'pageTitle' => '奇妙集市',
+            'pageTitle' => '神奇喵喵屋',
             'pageKey' => 'mallHome',
             'currentUser' => $user,
             'currentMember' => $member,

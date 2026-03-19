@@ -196,6 +196,87 @@
         window.setTimeout(() => item.remove(), 2800);
     };
 
+    const ADMIN_UPLOAD_MAX_BYTES = 1536 * 1024;
+    const ADMIN_UPLOAD_MAX_DIMENSION = 1800;
+    const ADMIN_UPLOAD_TARGET_BYTES = 1280 * 1024;
+    const replaceFileExtension = (name, nextExtension) => {
+        const safeName = String(name || 'image').trim() || 'image';
+        const normalized = safeName.replace(/\.[^.]+$/, '');
+        return `${normalized}.${nextExtension}`;
+    };
+    const loadImageFromBlob = (blob) => new Promise((resolve, reject) => {
+        const objectUrl = URL.createObjectURL(blob);
+        const image = new Image();
+        image.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+            resolve(image);
+        };
+        image.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            reject(new Error('图片读取失败，请重新选择。'));
+        };
+        image.src = objectUrl;
+    });
+    const canvasToBlob = (canvas, type, quality) => new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+            if (blob) {
+                resolve(blob);
+                return;
+            }
+            reject(new Error('图片处理失败，请重试。'));
+        }, type, quality);
+    });
+    const optimizeAdminUploadImage = async (file, preferredName = 'image.png') => {
+        if (!(file instanceof Blob)) {
+            return { blob: file, filename: preferredName };
+        }
+
+        const originalName = file instanceof File && file.name ? file.name : preferredName;
+        const mimeType = String(file.type || '').toLowerCase();
+        const canOptimize = /^image\/(png|jpe?g|webp)$/i.test(mimeType);
+
+        if (file.size <= ADMIN_UPLOAD_MAX_BYTES || !canOptimize) {
+            return { blob: file, filename: originalName };
+        }
+
+        const image = await loadImageFromBlob(file);
+        const naturalWidth = Math.max(1, Number(image.naturalWidth || image.width || 1));
+        const naturalHeight = Math.max(1, Number(image.naturalHeight || image.height || 1));
+        let scale = Math.min(1, ADMIN_UPLOAD_MAX_DIMENSION / Math.max(naturalWidth, naturalHeight));
+        let quality = 0.86;
+        let output = null;
+
+        for (let attempt = 0; attempt < 6; attempt += 1) {
+            const width = Math.max(1, Math.round(naturalWidth * scale));
+            const height = Math.max(1, Math.round(naturalHeight * scale));
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const context = canvas.getContext('2d');
+            if (!context) {
+                throw new Error('图片处理失败，请重试。');
+            }
+
+            context.drawImage(image, 0, 0, width, height);
+            output = await canvasToBlob(canvas, 'image/jpeg', quality);
+            if (output.size <= ADMIN_UPLOAD_MAX_BYTES) {
+                break;
+            }
+
+            quality = Math.max(0.58, quality - 0.08);
+            scale *= output.size > ADMIN_UPLOAD_TARGET_BYTES ? 0.82 : 0.9;
+        }
+
+        if (!output || output.size > ADMIN_UPLOAD_MAX_BYTES) {
+            throw new Error('图片体积过大，请压缩后重试。');
+        }
+
+        return {
+            blob: output,
+            filename: replaceFileExtension(originalName, 'jpg'),
+        };
+    };
+
     const isWechatUserAgent = () => /MicroMessenger/i.test(window.navigator.userAgent || '');
     const wechatOauthAttemptKey = (scene) => `wechat-oauth-attempted:${scene}`;
     const hasWechatOauthAttempted = (scene) => {
@@ -451,15 +532,17 @@
     };
 
     const editorUploadHandler = async (blobInfo) => {
+        const uploadFile = await optimizeAdminUploadImage(blobInfo.blob(), blobInfo.filename());
         const formData = new FormData();
-        formData.append('file', blobInfo.blob(), blobInfo.filename());
+        formData.append('file', uploadFile.blob, uploadFile.filename);
         const response = await apiRequest('/mall/api/admin/upload', { method: 'POST', body: formData });
         return response.location;
     };
 
     const uploadAdminFile = async (file) => {
+        const uploadFile = await optimizeAdminUploadImage(file, file.name);
         const formData = new FormData();
-        formData.append('file', file, file.name);
+        formData.append('file', uploadFile.blob, uploadFile.filename);
         const response = await apiRequest('/mall/api/admin/upload', { method: 'POST', body: formData });
         return response.location;
     };
