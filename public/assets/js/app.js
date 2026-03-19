@@ -444,6 +444,55 @@
             }
         }
     };
+    const richTextFullscreenBodyClass = 'rich-text-fullscreen-active';
+    const richTextFullscreenCleanupMap = new WeakMap();
+    const releaseRichTextFullscreen = (editor) => {
+        const cleanup = richTextFullscreenCleanupMap.get(editor);
+        if (typeof cleanup === 'function') {
+            cleanup();
+            richTextFullscreenCleanupMap.delete(editor);
+        }
+    };
+    const lockRichTextFullscreenLayout = (editor, host) => {
+        const container = editor?.getContainer?.();
+        const mountTarget = host || container;
+        if (!mountTarget) {
+            document.body.classList.add(richTextFullscreenBodyClass);
+            return () => {
+                document.body.classList.remove(richTextFullscreenBodyClass);
+            };
+        }
+
+        const existingCleanup = richTextFullscreenCleanupMap.get(editor);
+        if (typeof existingCleanup === 'function') {
+            existingCleanup();
+        }
+
+        const originalParent = mountTarget.parentNode;
+        const originalNextSibling = mountTarget.nextSibling;
+        const placeholder = document.createComment(`rich-text-fullscreen:${editor.id || 'editor'}`);
+        if (originalParent) {
+            originalParent.insertBefore(placeholder, mountTarget);
+            document.body.appendChild(mountTarget);
+        }
+
+        document.body.classList.add(richTextFullscreenBodyClass);
+        const cleanup = () => {
+            if (placeholder.parentNode && mountTarget.parentNode === document.body) {
+                placeholder.parentNode.insertBefore(mountTarget, placeholder);
+                placeholder.remove();
+            } else if (originalParent && mountTarget.parentNode !== originalParent) {
+                if (originalNextSibling && originalNextSibling.parentNode === originalParent) {
+                    originalParent.insertBefore(mountTarget, originalNextSibling);
+                } else {
+                    originalParent.appendChild(mountTarget);
+                }
+            }
+            document.body.classList.remove(richTextFullscreenBodyClass);
+        };
+        richTextFullscreenCleanupMap.set(editor, cleanup);
+        return cleanup;
+    };
     const createRichTextEditor = async ({
         selector,
         editorId,
@@ -466,6 +515,7 @@
             menubar: false,
             plugins: 'lists link image table code fullscreen',
             toolbar: 'undo redo | styles | bold italic | alignleft aligncenter alignright | bullist numlist | image link table | fullscreen code',
+            fullscreen_native: true,
             automatic_uploads: true,
             paste_data_images: true,
             convert_urls: false,
@@ -483,9 +533,17 @@
                     onChange(editor.getContent());
                 });
                 editor.on('FullscreenStateChanged', (event) => {
-                    if (!event.state) {
-                        window.requestAnimationFrame(() => applyRichTextEditorHeight(editor, getHost(), getViewportMode()));
+                    releaseRichTextFullscreen(editor);
+                    if (event.state) {
+                        window.requestAnimationFrame(() => {
+                            lockRichTextFullscreenLayout(editor, getHost());
+                        });
+                        return;
                     }
+                    window.requestAnimationFrame(() => applyRichTextEditorHeight(editor, getHost(), getViewportMode()));
+                });
+                editor.on('remove', () => {
+                    releaseRichTextFullscreen(editor);
                 });
             },
             images_upload_handler: editorUploadHandler,
