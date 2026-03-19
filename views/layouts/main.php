@@ -2,8 +2,9 @@
 <html lang="zh-CN">
 <head>
     <?php
+    $brandName = '神奇喵喵屋';
     $shareMeta = is_array($shareMeta ?? null) ? $shareMeta : [];
-    $metaTitle = (string) ($shareMeta['title'] ?? ($pageTitle ?? $appName));
+    $metaTitle = (string) ($shareMeta['title'] ?? ($pageTitle ?? $brandName));
     $metaDescription = trim((string) ($shareMeta['description'] ?? 'Sherry 的精选分享，集中展示精选商品、活动与课程内容。'));
     $metaUrl = (string) ($shareMeta['url'] ?? '');
     $metaImage = (string) ($shareMeta['image'] ?? '');
@@ -11,13 +12,13 @@
     ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title><?= htmlspecialchars(($pageTitle ?? $appName) . ' - ' . $appName, ENT_QUOTES, 'UTF-8') ?></title>
+    <title><?= htmlspecialchars(($pageTitle ?? $brandName) . ' - ' . $brandName, ENT_QUOTES, 'UTF-8') ?></title>
     <meta name="description" content="<?= htmlspecialchars($metaDescription, ENT_QUOTES, 'UTF-8') ?>">
     <?php if ($metaUrl !== ''): ?>
         <link rel="canonical" href="<?= htmlspecialchars($metaUrl, ENT_QUOTES, 'UTF-8') ?>">
         <meta property="og:url" content="<?= htmlspecialchars($metaUrl, ENT_QUOTES, 'UTF-8') ?>">
     <?php endif; ?>
-    <meta property="og:site_name" content="<?= htmlspecialchars((string) $appName, ENT_QUOTES, 'UTF-8') ?>">
+    <meta property="og:site_name" content="<?= htmlspecialchars($brandName, ENT_QUOTES, 'UTF-8') ?>">
     <meta property="og:type" content="<?= htmlspecialchars($metaType, ENT_QUOTES, 'UTF-8') ?>">
     <meta property="og:title" content="<?= htmlspecialchars($metaTitle, ENT_QUOTES, 'UTF-8') ?>">
     <meta property="og:description" content="<?= htmlspecialchars($metaDescription, ENT_QUOTES, 'UTF-8') ?>">
@@ -151,7 +152,7 @@
             'csrfToken' => $csrfToken ?? '',
             'currentUser' => $currentUser,
             'currentMember' => $currentMember ?? null,
-            'appName' => $appName ?? '神奇喵喵屋',
+            'appName' => $brandName,
         ]) ?>;
     </script>
     <button type="button" data-back-to-top class="back-top-button" aria-label="返回顶部">↑</button>
