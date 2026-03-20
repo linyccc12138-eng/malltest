@@ -124,11 +124,15 @@ class WechatService
                 'currency' => 'CNY',
             ],
         ];
+        $timeExpire = $this->normalizeTimeExpire((string) ($order['expires_at'] ?? ''));
+        if ($timeExpire !== null) {
+            $payload['time_expire'] = $timeExpire;
+        }
 
         if ($mode === 'H5') {
             $endpoint = 'https://api.mch.weixin.qq.com/v3/pay/transactions/h5';
             $payload['scene_info'] = [
-                'payer_client_ip' => '127.0.0.1',
+                'payer_client_ip' => $this->normalizeClientIp((string) ($order['client_ip'] ?? '')),
                 'h5_info' => ['type' => 'Wap'],
             ];
         } else {
@@ -207,6 +211,36 @@ class WechatService
             'payload' => $resourceData,
             'raw' => $payload,
         ];
+    }
+
+    public function queryOrderByOutTradeNo(string $outTradeNo): array
+    {
+        $config = $this->payConfig();
+        $this->assertPayFields($config, ['merchant_id', 'merchant_serial_no', 'private_key_content']);
+        $normalized = trim($outTradeNo);
+        if ($normalized === '') {
+            throw new \RuntimeException('缺少商户订单号。');
+        }
+
+        $endpoint = 'https://api.mch.weixin.qq.com/v3/pay/transactions/out-trade-no/' . rawurlencode($normalized)
+            . '?mchid=' . rawurlencode((string) $config['merchant_id']);
+
+        return $this->wechatPayRequest('GET', $endpoint, null, $config);
+    }
+
+    public function closeOrderByOutTradeNo(string $outTradeNo): void
+    {
+        $config = $this->payConfig();
+        $this->assertPayFields($config, ['merchant_id', 'merchant_serial_no', 'private_key_content']);
+        $normalized = trim($outTradeNo);
+        if ($normalized === '') {
+            throw new \RuntimeException('缺少商户订单号。');
+        }
+
+        $endpoint = 'https://api.mch.weixin.qq.com/v3/pay/transactions/out-trade-no/' . rawurlencode($normalized) . '/close';
+        $this->wechatPayRequest('POST', $endpoint, [
+            'mchid' => (string) $config['merchant_id'],
+        ], $config);
     }
 
     public function testPayConfig(array $config): array
@@ -404,9 +438,13 @@ class WechatService
         $timestamp = $this->headerValue($headers, ['HTTP_WECHATPAY_TIMESTAMP', 'Wechatpay-Timestamp', 'wechatpay-timestamp']);
         $nonce = $this->headerValue($headers, ['HTTP_WECHATPAY_NONCE', 'Wechatpay-Nonce', 'wechatpay-nonce']);
         $signature = $this->headerValue($headers, ['HTTP_WECHATPAY_SIGNATURE', 'Wechatpay-Signature', 'wechatpay-signature']);
+        $serial = $this->headerValue($headers, ['HTTP_WECHATPAY_SERIAL', 'Wechatpay-Serial', 'wechatpay-serial']);
 
-        if ($timestamp === '' || $nonce === '' || $signature === '') {
+        if ($timestamp === '' || $nonce === '' || $signature === '' || $serial === '') {
             throw new \RuntimeException('微信支付通知验签头缺失。');
+        }
+        if (!ctype_digit($timestamp) || abs(time() - (int) $timestamp) > 300) {
+            throw new \RuntimeException('微信支付通知时间戳无效。');
         }
 
         $message = $timestamp . "\n" . $nonce . "\n" . $body . "\n";
@@ -414,8 +452,17 @@ class WechatService
         if ($publicKey === false) {
             throw new \RuntimeException('微信支付平台证书内容无效。');
         }
+        $platformSerial = $this->certificateSerial((string) $config['platform_cert_content']);
+        if ($platformSerial === null || !$this->serialEquals($platformSerial, $serial)) {
+            throw new \RuntimeException('微信支付通知证书序列号不匹配。');
+        }
 
-        $verified = openssl_verify($message, base64_decode($signature), $publicKey, OPENSSL_ALGO_SHA256);
+        $decodedSignature = base64_decode($signature, true);
+        if ($decodedSignature === false) {
+            throw new \RuntimeException('微信支付通知签名格式无效。');
+        }
+
+        $verified = openssl_verify($message, $decodedSignature, $publicKey, OPENSSL_ALGO_SHA256);
         if ($verified !== 1) {
             throw new \RuntimeException('微信支付通知验签失败。');
         }
@@ -458,6 +505,62 @@ class WechatService
         }
 
         return openssl_pkey_get_public($cert);
+    }
+
+    private function certificateSerial(string $certificateContent): ?string
+    {
+        $parsed = openssl_x509_parse($certificateContent);
+        if (!is_array($parsed)) {
+            return null;
+        }
+
+        $serialHex = strtoupper((string) ($parsed['serialNumberHex'] ?? ''));
+        if ($serialHex === '') {
+            $serialHex = strtoupper((string) ($parsed['serialNumber'] ?? ''));
+        }
+
+        $normalized = ltrim(str_replace(':', '', $serialHex), '0');
+        return $normalized === '' ? '0' : $normalized;
+    }
+
+    private function serialEquals(string $expectedSerial, string $headerSerial): bool
+    {
+        $expected = ltrim(strtoupper(str_replace(':', '', $expectedSerial)), '0');
+        $header = ltrim(strtoupper(str_replace(':', '', $headerSerial)), '0');
+        if ($expected === '') {
+            $expected = '0';
+        }
+        if ($header === '') {
+            $header = '0';
+        }
+
+        return hash_equals($expected, $header);
+    }
+
+    private function normalizeTimeExpire(string $expiresAt): ?string
+    {
+        $value = trim($expiresAt);
+        if ($value === '') {
+            return null;
+        }
+
+        try {
+            $timezone = new \DateTimeZone((string) date_default_timezone_get());
+            $dt = new \DateTimeImmutable($value, $timezone);
+            return $dt->format(\DateTimeInterface::RFC3339);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function normalizeClientIp(string $ip): string
+    {
+        $candidate = trim($ip);
+        if (!filter_var($candidate, FILTER_VALIDATE_IP)) {
+            throw new \RuntimeException('未识别到有效的客户端 IP，无法发起微信 H5 支付。');
+        }
+
+        return $candidate;
     }
 
     private function assertPayFields(array $config, array $fields): void

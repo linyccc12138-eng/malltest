@@ -69,6 +69,7 @@ $app->instance('orders', $orderService);
 $pageController = new Mall\Controllers\PageController($app, $catalogService, $userService, $membershipService, $settingsService, $orderService);
 $apiController = new Mall\Controllers\ApiController($app, $catalogService, $userService, $membershipService, $orderService, $wechatService);
 $adminApiController = new Mall\Controllers\AdminApiController($app, $dashboardService, $catalogService, $userService, $membershipService, $orderService, $settingsService, $wechatService, $db);
+$openAccountApiController = new Mall\Controllers\OpenAccountApiController($app, $userService, $wechatService);
 $router = $app->router();
 
 $router->get('/', [$pageController, 'navigation']);
@@ -112,6 +113,7 @@ $router->get('/mall/api/orders/{id}', [$apiController, 'orderDetail']);
 $router->get('/mall/api/order-detail-access', [$apiController, 'orderDetailAccess']);
 $router->post('/mall/api/orders/{id}/pay/balance', [$apiController, 'payBalance']);
 $router->post('/mall/api/orders/{id}/pay/wechat', [$apiController, 'payWechat']);
+$router->get('/mall/api/orders/{id}/pay/wechat/status', [$apiController, 'wechatPayStatus']);
 $router->post('/mall/api/orders/{id}/cancel', [$apiController, 'cancelOrder']);
 $router->post('/mall/api/orders/{id}/complete', [$apiController, 'completeOrder']);
 $router->get('/mall/api/wallet', [$apiController, 'wallet']);
@@ -123,6 +125,19 @@ $router->post('/mall/api/wechat/unbind', [$apiController, 'unbindWechatCurrent']
 $router->get('/mall/api/wechat/jssdk-config', [$apiController, 'wechatJsSdkConfig']);
 $router->get('/mall/api/wechat/callback', [$apiController, 'wechatCallback']);
 $router->post('/mall/api/wechat/notify', [$apiController, 'wechatNotify']);
+
+$router->get('/mall/api/open/accounts', [$openAccountApiController, 'users']);
+$router->post('/mall/api/open/accounts/search', [$openAccountApiController, 'users']);
+$router->get('/mall/api/open/accounts/{id}', [$openAccountApiController, 'userDetail']);
+$router->post('/mall/api/open/accounts', [$openAccountApiController, 'createUser']);
+$router->post('/mall/api/open/accounts/login', [$openAccountApiController, 'login']);
+$router->post('/mall/api/open/accounts/wechat-login', [$openAccountApiController, 'wechatLogin']);
+$router->post('/mall/api/open/accounts/{id}/bind-wechat', [$openAccountApiController, 'bindWechat']);
+$router->post('/mall/api/open/accounts/{id}/reset-password', [$openAccountApiController, 'resetPassword']);
+$router->post('/mall/api/open/accounts/{id}/change-password', [$openAccountApiController, 'changePassword']);
+$router->post('/mall/api/open/accounts/{id}', [$openAccountApiController, 'userDetail']);
+$router->get('/mall/api/open/wechat/authorize-url', [$openAccountApiController, 'authorizeUrl']);
+$router->post('/mall/api/open/wechat/authorize-url', [$openAccountApiController, 'authorizeUrl']);
 
 $router->get('/mall/api/admin/dashboard', [$adminApiController, 'dashboard']);
 $router->get('/mall/api/admin/products', [$adminApiController, 'products']);

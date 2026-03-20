@@ -60,7 +60,23 @@ class Request
     public function header(string $name, ?string $default = null): ?string
     {
         $headerName = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
-        return $this->server[$headerName] ?? $default;
+        if (array_key_exists($headerName, $this->server) && $this->server[$headerName] !== '') {
+            return $this->server[$headerName];
+        }
+
+        if (function_exists('getallheaders')) {
+            $headers = getallheaders();
+            if (is_array($headers)) {
+                $normalizedName = strtolower($name);
+                foreach ($headers as $headerKey => $headerValue) {
+                    if (strtolower((string) $headerKey) === $normalizedName) {
+                        return is_string($headerValue) ? $headerValue : $default;
+                    }
+                }
+            }
+        }
+
+        return $default;
     }
 
     public function expectsJson(): bool
@@ -72,7 +88,27 @@ class Request
 
     public function ip(): string
     {
-        return (string) ($this->server['REMOTE_ADDR'] ?? '0.0.0.0');
+        $forwardedFor = trim((string) ($this->server['HTTP_X_FORWARDED_FOR'] ?? ''));
+        if ($forwardedFor !== '') {
+            $candidates = array_map('trim', explode(',', $forwardedFor));
+            foreach ($candidates as $candidate) {
+                if (filter_var($candidate, FILTER_VALIDATE_IP)) {
+                    return $candidate;
+                }
+            }
+        }
+
+        $realIp = trim((string) ($this->server['HTTP_X_REAL_IP'] ?? ''));
+        if ($realIp !== '' && filter_var($realIp, FILTER_VALIDATE_IP)) {
+            return $realIp;
+        }
+
+        $remoteAddr = trim((string) ($this->server['REMOTE_ADDR'] ?? ''));
+        if ($remoteAddr !== '' && filter_var($remoteAddr, FILTER_VALIDATE_IP)) {
+            return $remoteAddr;
+        }
+
+        return '0.0.0.0';
     }
 
     public function userAgent(): string

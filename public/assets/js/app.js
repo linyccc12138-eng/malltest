@@ -841,6 +841,68 @@
 
         return payload.data ?? payload;
     };
+    const sleep = (ms = 0) => new Promise((resolve) => window.setTimeout(resolve, ms));
+    const buildOrderResultUrl = (orderId, params = {}) => {
+        const search = new URLSearchParams({
+            order_id: String(orderId || ''),
+            ...params,
+        });
+        return `/mall/order-result?${search.toString()}`;
+    };
+    const buildWechatOrderResultUrl = (orderId, params = {}) => buildOrderResultUrl(orderId, {
+        pay: 'wechat',
+        ...params,
+    });
+    const buildWechatH5PayUrl = (payUrl, orderId) => {
+        const redirectUrl = new URL(buildWechatOrderResultUrl(orderId, { wechat_return: '1' }), window.location.origin).toString();
+        try {
+            const url = new URL(payUrl);
+            url.searchParams.set('redirect_url', redirectUrl);
+            return url.toString();
+        } catch (error) {
+            const separator = String(payUrl || '').includes('?') ? '&' : '?';
+            return `${payUrl}${separator}redirect_url=${encodeURIComponent(redirectUrl)}`;
+        }
+    };
+    const confirmWechatPayStatus = async (orderId, options = {}) => {
+        const attempts = Math.max(1, Number(options.attempts || 5));
+        const delayMs = Math.max(200, Number(options.delayMs || 1200));
+        let lastPayload = null;
+        let lastError = null;
+
+        for (let attempt = 0; attempt < attempts; attempt += 1) {
+            try {
+                lastPayload = await apiRequest(`/mall/api/orders/${orderId}/pay/wechat/status`);
+                const order = lastPayload?.order || null;
+                const tradeState = String(lastPayload?.trade_state || '').toUpperCase();
+                if ((order?.payment_status || '') === 'paid' || (order?.status || '') === 'closed' || ['SUCCESS', 'CLOSED', 'REVOKED', 'PAYERROR'].includes(tradeState)) {
+                    return lastPayload;
+                }
+                lastError = null;
+            } catch (error) {
+                lastError = error;
+                if (attempt === attempts - 1) {
+                    throw error;
+                }
+            }
+
+            if (attempt < attempts - 1) {
+                await sleep(delayMs);
+            }
+        }
+
+        if (lastPayload) {
+            return lastPayload;
+        }
+        if (lastError) {
+            throw lastError;
+        }
+
+        return null;
+    };
+    const redirectToWechatOrderResult = (orderId, params = {}) => {
+        window.location.href = buildWechatOrderResultUrl(orderId, params);
+    };
 
     const flattenCategories = (items, bucket = [], depth = 0) => {
         (items || []).forEach((item, index) => {
@@ -1056,7 +1118,7 @@
     });
 
     const defaultCategoryForm = () => ({ id: null, name: '', parent_id: '0', level: 1 });
-    const defaultUserForm = () => ({ id: null, username: '', nickname: '', phone: '', password: '', membership_member_id: '', allow_duplicate_membership: false, status: 'active' });
+    const defaultUserForm = () => ({ id: null, nickname: '', phone: '', password: '', membership_member_id: '', allow_duplicate_membership: false, status: 'active' });
     const defaultMemberForm = () => ({ id: null, fnumber: '', fname: '', fclassesid: '', fclassesname: '', initial_amount: 0, fbalance: 0, fmark: '', adjust_amount: '', adjust_mark: '' });
     const defaultShipOrderForm = () => ({ id: null, order_no: '', shipping_company: '顺丰速运', shipping_no: '' });
     const defaultCloseOrderForm = () => ({ id: null, order_no: '', reason: '管理后台关闭订单' });
@@ -1111,7 +1173,7 @@
 
     document.addEventListener('alpine:init', () => {
         Alpine.data('loginPage', () => ({
-            form: { username: '', password: '' },
+            form: { phone: '', password: '' },
             wechat: { ...defaultWechatStatus(), loading: false },
             init() {
                 void this.bootstrapWechat();
@@ -2186,19 +2248,36 @@
 
                     const payResult = await apiRequest(`/mall/api/orders/${order.id}/pay/wechat`, { method: 'POST', body: {} });
                     if (payResult.mode === 'H5' && payResult.pay_url) {
-                        window.location.href = payResult.pay_url;
+                        window.location.href = buildWechatH5PayUrl(payResult.pay_url, order.id);
                         return;
                     }
 
-                    if (window.WeixinJSBridge && payResult.pay_params) {
-                        window.WeixinJSBridge.invoke('getBrandWCPayRequest', payResult.pay_params, () => {
-                            window.location.href = `/mall/order-result?order_id=${order.id}`;
-                        });
-                        return;
+                    if (payResult.pay_params) {
+                        const bridge = window.WeixinJSBridge || await waitForWeixinBridge();
+                        if (bridge && typeof bridge.invoke === 'function') {
+                            bridge.invoke('getBrandWCPayRequest', payResult.pay_params, async (bridgeResult = {}) => {
+                                try {
+                                    const confirmation = await confirmWechatPayStatus(order.id);
+                                    const confirmedOrder = confirmation?.order || null;
+                                    if ((confirmedOrder?.payment_status || '') === 'paid') {
+                                        notice('支付结果已确认。');
+                                    } else if (/cancel/i.test(String(bridgeResult.err_msg || ''))) {
+                                        notice('已取消微信支付，可稍后在订单列表继续支付。', 'error');
+                                    } else if (confirmation?.trade_state_desc) {
+                                        notice(confirmation.trade_state_desc, 'error');
+                                    }
+                                } catch (error) {
+                                    notice(error.message || '支付结果确认失败，请稍后在订单中查看。', 'error');
+                                }
+
+                                redirectToWechatOrderResult(order.id, { wechat_checked: '1' });
+                            });
+                            return;
+                        }
                     }
 
                     notice(payResult.message || '微信支付参数已生成，请在微信环境中完成支付。');
-                    window.location.href = `/mall/order-result?order_id=${order.id}`;
+                    redirectToWechatOrderResult(order.id, { wechat_checked: '1' });
                 } catch (error) {
                     notice(error.message, 'error');
                 }
@@ -2303,6 +2382,8 @@
 
         Alpine.data('orderResultPage', () => ({
             order: null,
+            wechatChecking: false,
+            wechatCheckMessage: '',
             init() {
                 void this.loadOrder();
             },
@@ -2313,12 +2394,38 @@
                 }
                 try {
                     this.order = await apiRequest(`/mall/api/orders/${orderId}`);
+                    if (queryParam('pay') === 'wechat' && this.order && this.order.payment_status !== 'paid' && this.order.status === 'pending_payment') {
+                        await this.confirmWechatOrder(orderId);
+                    }
                 } catch (error) {
                     notice(error.message, 'error');
                 }
             },
             resultTitle() {
+                if (this.wechatChecking) {
+                    return '正在确认支付结果';
+                }
                 return orderResultTitle(this.order);
+            },
+            async confirmWechatOrder(orderId) {
+                this.wechatChecking = true;
+                this.wechatCheckMessage = '正在向微信确认支付结果，请稍候。';
+                try {
+                    const payload = await confirmWechatPayStatus(orderId);
+                    this.order = payload?.order || this.order;
+                    if ((this.order?.payment_status || '') === 'paid') {
+                        this.wechatCheckMessage = '支付结果已和微信确认。';
+                    } else if ((this.order?.status || '') === 'closed' || String(payload?.trade_state || '').toUpperCase() === 'CLOSED') {
+                        this.wechatCheckMessage = '该微信订单已关闭。';
+                    } else {
+                        this.wechatCheckMessage = payload?.trade_state_desc || '支付结果暂未完成，可稍后在订单列表继续查看。';
+                    }
+                } catch (error) {
+                    this.wechatCheckMessage = error.message || '微信支付结果确认失败。';
+                    notice(this.wechatCheckMessage, 'error');
+                } finally {
+                    this.wechatChecking = false;
+                }
             },
             statusLabel: orderStatusLabel,
             paymentMethodLabel,
@@ -3132,7 +3239,6 @@
                 this.userForm = item
                     ? {
                         id: item.id,
-                        username: item.username,
                         nickname: item.nickname,
                         phone: item.phone,
                         password: '',
@@ -3172,7 +3278,8 @@
                 } catch (error) {
                     if (error.errorCode === 'confirm_required') {
                         const boundUser = error.data?.bound_user || {};
-                        const label = [boundUser.nickname || boundUser.username || '未知用户', boundUser.username ? `（${boundUser.username}）` : ''].join('');
+                        const identity = boundUser.phone || boundUser.username || '';
+                        const label = [boundUser.nickname || boundUser.phone || boundUser.username || '未知用户', identity ? `（${identity}）` : ''].join('');
                         const confirmed = window.confirm(`${error.message}\n当前绑定用户：${label}`);
                         if (!confirmed) {
                             return;
@@ -3201,7 +3308,7 @@
             async toggleUserStatus(item) {
                 const nextStatus = item.status === 'active' ? 'disabled' : 'active';
                 const actionLabel = nextStatus === 'active' ? '启用' : '禁用';
-                if (!window.confirm(`确认要${actionLabel}用户“${item.nickname || item.username}”吗？`)) {
+                if (!window.confirm(`确认要${actionLabel}用户“${item.nickname || item.phone || '未命名用户'}”吗？`)) {
                     return;
                 }
 
@@ -3221,7 +3328,7 @@
                 }
             },
             async resetUserPassword(item) {
-                if (!window.confirm(`确认将“${item.nickname || item.username}”的密码重置为手机号后 8 位吗？`)) {
+                if (!window.confirm(`确认将“${item.nickname || item.phone || '未命名用户'}”的密码重置为手机号后 8 位吗？`)) {
                     return;
                 }
 

@@ -43,7 +43,7 @@ class ApiController extends BaseController
         return $this->respond(function () use ($request): array {
             $this->validateCsrf($request);
             $result = $this->users->login(
-                trim((string) $request->input('username', '')),
+                trim((string) $request->input('phone', '')),
                 (string) $request->input('password', ''),
                 $request
             );
@@ -281,7 +281,15 @@ class ApiController extends BaseController
         return $this->respond(function () use ($request, $params): array {
             $this->validateCsrf($request);
             $user = $this->users->requireUser();
-            return $this->orders->startWechatPay((int) $user['id'], (int) ($params['id'] ?? 0));
+            return $this->orders->startWechatPay((int) $user['id'], (int) ($params['id'] ?? 0), $request->ip());
+        });
+    }
+
+    public function wechatPayStatus(Request $request, array $params = []): Response
+    {
+        return $this->respond(function () use ($params): array {
+            $user = $this->users->requireUser();
+            return $this->orders->checkWechatPayStatus((int) $user['id'], (int) ($params['id'] ?? 0));
         });
     }
 

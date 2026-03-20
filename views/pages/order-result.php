@@ -2,6 +2,7 @@
     <div class="rounded-[2rem] border border-bronze/15 bg-white/80 p-6 shadow-glow sm:p-8">
         <div class="text-sm uppercase tracking-[0.35em] text-bronze/70">订单结果</div>
         <h1 class="mt-3 font-display text-4xl text-ink" x-text="resultTitle()"></h1>
+        <div x-show="wechatCheckMessage" x-text="wechatCheckMessage" class="mt-4 rounded-[1.2rem] border border-teal/15 bg-teal/6 px-4 py-3 text-sm text-ink/70"></div>
 
         <template x-if="order">
             <div class="mt-6 space-y-6">

@@ -371,7 +371,7 @@ class OrderService
         }
     }
 
-    public function startWechatPay(int $userId, int $orderId): array
+    public function startWechatPay(int $userId, int $orderId, string $clientIp = ''): array
     {
         if (!$this->wechat) {
             throw new \RuntimeException('微信支付服务未启用。');
@@ -384,6 +384,7 @@ class OrderService
         }
 
         $paymentNo = $this->generatePaymentNo();
+        $order['client_ip'] = $clientIp;
         $payPayload = $this->wechat->createPayOrder($order, $user);
 
         $pdo = $this->db->mall();
@@ -403,6 +404,14 @@ class OrderService
             ':created_at' => now(),
             ':updated_at' => now(),
         ]);
+        $this->db->mall()->prepare(
+            'UPDATE orders SET payment_method = :payment_method, updated_at = :updated_at WHERE id = :id AND status = :status'
+        )->execute([
+            ':payment_method' => 'wechat',
+            ':updated_at' => now(),
+            ':id' => $orderId,
+            ':status' => 'pending_payment',
+        ]);
 
         return $payPayload;
     }
@@ -414,12 +423,62 @@ class OrderService
         }
 
         $notify = $this->wechat->handlePayNotify($headers, $body);
+        $eventType = (string) ($notify['raw']['event_type'] ?? '');
+        if ($eventType !== '' && $eventType !== 'TRANSACTION.SUCCESS') {
+            return [
+                'message' => '忽略非支付成功通知。',
+                'event_type' => $eventType,
+            ];
+        }
+
         $orderNo = (string) ($notify['order_no'] ?? '');
         if ($orderNo === '') {
             throw new \RuntimeException('微信支付通知缺少订单号。');
         }
 
         return $this->markWechatOrderPaid($orderNo, $notify['payload']);
+    }
+
+    public function checkWechatPayStatus(int $userId, int $orderId): array
+    {
+        if (!$this->wechat) {
+            throw new \RuntimeException('微信支付服务未启用。');
+        }
+
+        $order = $this->findOrder($orderId, $userId, true);
+        if (!$order) {
+            throw new \RuntimeException('订单不存在。');
+        }
+
+        if ((string) ($order['payment_status'] ?? '') === 'paid') {
+            return [
+                'order' => $order,
+                'trade_state' => 'SUCCESS',
+            ];
+        }
+
+        $query = $this->wechat->queryOrderByOutTradeNo((string) ($order['order_no'] ?? ''));
+        $tradeState = strtoupper((string) ($query['trade_state'] ?? ''));
+        if ($tradeState === 'SUCCESS') {
+            $paidOrder = $this->markWechatOrderPaid((string) ($order['order_no'] ?? ''), $query);
+
+            return [
+                'order' => $paidOrder,
+                'trade_state' => 'SUCCESS',
+                'trade_state_desc' => (string) ($query['trade_state_desc'] ?? ''),
+            ];
+        }
+
+        if ($tradeState === 'CLOSED' && (string) ($order['status'] ?? '') === 'pending_payment') {
+            $this->closeOrderInternal((int) $order['id'], 'wechat_closed', '微信侧订单已关闭，商城同步关闭');
+            $order = $this->findOrder((int) $order['id'], $userId, true) ?? $order;
+        }
+
+        return [
+            'order' => $order,
+            'trade_state' => $tradeState,
+            'trade_state_desc' => (string) ($query['trade_state_desc'] ?? ''),
+        ];
     }
     public function userOrders(int $userId, string $group = 'all', int $page = 1, int $pageSize = 15): array
     {
@@ -910,7 +969,7 @@ class OrderService
             $order['address_snapshot'] = json_decode((string) ($order['address_snapshot_json'] ?? '[]'), true) ?: [];
             $address = is_array($order['address_snapshot']) ? $order['address_snapshot'] : [];
             $user = $userMap[(int) ($order['user_id'] ?? 0)] ?? [];
-            $order['user_nickname'] = (string) ($user['nickname'] ?? $user['username'] ?? '');
+            $order['user_nickname'] = (string) ($user['nickname'] ?? $user['phone'] ?? $user['username'] ?? '');
             $order['user_phone'] = (string) ($user['phone'] ?? '');
             $order['receiver_name'] = (string) ($address['receiver_name'] ?? '');
             $order['receiver_phone'] = (string) ($address['receiver_phone'] ?? '');
@@ -982,6 +1041,7 @@ class OrderService
         $user = $this->users->findUser((int) $order['user_id']);
         $goodsNames = $this->goodsNamesFromOrder($order);
         $refundAmount = (float) $order['paid_amount'];
+        $shouldCloseWechat = false;
         $memberRefunded = false;
         $memberId = 0;
 
@@ -1037,10 +1097,23 @@ class OrderService
                 } elseif ($locked['payment_method'] === 'wechat') {
                     $this->insertWalletLedger($pdo, (int) $locked['user_id'], $orderId, 'wechat_refund_notice', 0, '微信支付订单已关闭，请在商户平台人工退款');
                 }
+            } elseif ($locked['payment_status'] === 'unpaid' && $locked['payment_method'] === 'wechat') {
+                $shouldCloseWechat = true;
             }
 
             $pdo->commit();
             $this->clearOrderExpireKey((string) $locked['order_no']);
+            if ($shouldCloseWechat && $this->wechat) {
+                try {
+                    $this->wechat->closeOrderByOutTradeNo((string) $locked['order_no']);
+                } catch (\Throwable $throwable) {
+                    $this->logger->warning('order', '微信订单关闭同步失败', [
+                        'order_id' => $orderId,
+                        'order_no' => $locked['order_no'],
+                        'error' => $throwable->getMessage(),
+                    ]);
+                }
+            }
             $this->logger->info('order', '订单已关闭', ['order_id' => $orderId, 'reason' => $logReason]);
         } catch (\Throwable $throwable) {
             $pdo->rollBack();
@@ -1126,7 +1199,7 @@ class OrderService
         return 'PAY' . date('YmdHis') . random_int(1000, 9999);
     }
 
-    private function markOrderPaidInTransaction(PDO $pdo, int $orderId, string $method, string $paymentNo, string $payloadJson): void
+    private function markOrderPaidInTransaction(PDO $pdo, int $orderId, string $method, string $paymentNo, string $payloadJson, ?string $transactionNo = null): void
     {
         $order = $this->findOrderForUpdate($pdo, $orderId);
         if (!$order || $order['status'] !== 'pending_payment') {
@@ -1159,7 +1232,7 @@ class OrderService
             ':method' => $method,
             ':status' => 'success',
             ':amount' => (float) $order['payable_amount'],
-            ':transaction_no' => $paymentNo,
+            ':transaction_no' => $transactionNo ?? $paymentNo,
             ':request_payload_json' => '{}',
             ':response_payload_json' => $payloadJson,
             ':created_at' => now(),
@@ -1214,13 +1287,67 @@ class OrderService
             if (!$current) {
                 throw new \RuntimeException('订单不存在。');
             }
+            $this->assertWechatPayloadMatchesOrder($current, $payload);
             if ($current['status'] !== 'pending_payment') {
+                if ($current['status'] === 'closed' && $current['payment_status'] === 'unpaid') {
+                    $paymentNo = $this->markWechatPaymentSuccessRecord($pdo, (int) $order['id'], $payload);
+                    if ($paymentNo === '') {
+                        $paymentNo = $this->insertWechatPaymentSuccessRecord($pdo, (int) $order['id'], (float) $current['payable_amount'], $payload);
+                    }
+
+                    $update = $pdo->prepare(
+                        'UPDATE orders
+                         SET payment_status = :payment_status, payment_method = :payment_method, paid_amount = :paid_amount,
+                             paid_at = :paid_at, updated_at = :updated_at
+                         WHERE id = :id'
+                    );
+                    $update->execute([
+                        ':payment_status' => 'refund_pending',
+                        ':payment_method' => 'wechat',
+                        ':paid_amount' => (float) $current['payable_amount'],
+                        ':paid_at' => now(),
+                        ':updated_at' => now(),
+                        ':id' => (int) $order['id'],
+                    ]);
+                    $this->insertWalletLedger($pdo, (int) $order['user_id'], (int) $order['id'], 'wechat_refund_notice', 0, '订单已关闭但微信支付成功，请在商户平台人工退款');
+                    $pdo->commit();
+                    $this->clearOrderExpireKey($orderNo);
+
+                    return $this->findOrder((int) $order['id'], (int) $order['user_id'], true) ?? $current;
+                }
+
                 $pdo->rollBack();
                 return $current;
             }
 
-            $paymentNo = $this->generatePaymentNo();
-            $this->markOrderPaidInTransaction($pdo, (int) $order['id'], 'wechat', $paymentNo, json_encode_unicode($payload));
+            $paymentNo = $this->markWechatPaymentSuccessRecord($pdo, (int) $order['id'], $payload);
+            if ($paymentNo === '') {
+                $paymentNo = $this->generatePaymentNo();
+                $this->markOrderPaidInTransaction(
+                    $pdo,
+                    (int) $order['id'],
+                    'wechat',
+                    $paymentNo,
+                    json_encode_unicode($payload),
+                    (string) ($payload['transaction_id'] ?? '')
+                );
+            } else {
+                $update = $pdo->prepare(
+                    'UPDATE orders
+                     SET status = :status, payment_status = :payment_status, payment_method = :payment_method, paid_amount = :paid_amount,
+                         paid_at = :paid_at, updated_at = :updated_at
+                     WHERE id = :id'
+                );
+                $update->execute([
+                    ':status' => 'pending_shipment',
+                    ':payment_status' => 'paid',
+                    ':payment_method' => 'wechat',
+                    ':paid_amount' => (float) $current['payable_amount'],
+                    ':paid_at' => now(),
+                    ':updated_at' => now(),
+                    ':id' => (int) $order['id'],
+                ]);
+            }
             $pdo->commit();
             $this->clearOrderExpireKey($orderNo);
 
@@ -1247,5 +1374,104 @@ class OrderService
             static fn (array $item): string => sprintf('%s*%d', (string) ($item['product_name'] ?? ''), (int) ($item['quantity'] ?? 0)),
             $items
         ));
+    }
+
+    private function assertWechatPayloadMatchesOrder(array $order, array $payload): void
+    {
+        $tradeState = strtoupper((string) ($payload['trade_state'] ?? ''));
+        if ($tradeState !== 'SUCCESS') {
+            throw new \RuntimeException('微信支付订单状态不是 SUCCESS。');
+        }
+
+        $outTradeNo = (string) ($payload['out_trade_no'] ?? '');
+        if ($outTradeNo === '' || !hash_equals((string) ($order['order_no'] ?? ''), $outTradeNo)) {
+            throw new \RuntimeException('微信支付通知订单号不匹配。');
+        }
+
+        $config = $this->wechat?->payConfig() ?? [];
+        $appId = (string) ($payload['appid'] ?? '');
+        if (!empty($config['app_id']) && $appId !== '' && !hash_equals((string) $config['app_id'], $appId)) {
+            throw new \RuntimeException('微信支付通知 AppID 不匹配。');
+        }
+
+        $merchantId = (string) ($payload['mchid'] ?? '');
+        if (!empty($config['merchant_id']) && $merchantId !== '' && !hash_equals((string) $config['merchant_id'], $merchantId)) {
+            throw new \RuntimeException('微信支付通知商户号不匹配。');
+        }
+
+        $expectedTotal = (int) round(((float) ($order['payable_amount'] ?? 0)) * 100);
+        $actualTotal = (int) ($payload['amount']['total'] ?? -1);
+        if ($expectedTotal !== $actualTotal) {
+            throw new \RuntimeException('微信支付通知金额不匹配。');
+        }
+        $currency = strtoupper((string) ($payload['amount']['currency'] ?? ''));
+        if ($currency !== '' && $currency !== 'CNY') {
+            throw new \RuntimeException('微信支付通知币种不匹配。');
+        }
+
+        $transactionId = trim((string) ($payload['transaction_id'] ?? ''));
+        if ($transactionId === '') {
+            throw new \RuntimeException('微信支付通知缺少微信支付交易单号。');
+        }
+    }
+
+    private function markWechatPaymentSuccessRecord(PDO $pdo, int $orderId, array $payload): string
+    {
+        $transactionNo = trim((string) ($payload['transaction_id'] ?? ''));
+        $stmt = $pdo->prepare(
+            'SELECT id, payment_no
+             FROM payments
+             WHERE order_id = :order_id AND method = :method AND status = :status
+             ORDER BY id DESC
+             LIMIT 1
+             FOR UPDATE'
+        );
+        $stmt->execute([
+            ':order_id' => $orderId,
+            ':method' => 'wechat',
+            ':status' => 'pending',
+        ]);
+        $payment = $stmt->fetch();
+        if (!$payment) {
+            return '';
+        }
+
+        $update = $pdo->prepare(
+            'UPDATE payments
+             SET status = :status, transaction_no = :transaction_no, response_payload_json = :response_payload_json, updated_at = :updated_at
+             WHERE id = :id'
+        );
+        $update->execute([
+            ':status' => 'success',
+            ':transaction_no' => $transactionNo,
+            ':response_payload_json' => json_encode_unicode($payload),
+            ':updated_at' => now(),
+            ':id' => (int) $payment['id'],
+        ]);
+
+        return (string) ($payment['payment_no'] ?? '');
+    }
+
+    private function insertWechatPaymentSuccessRecord(PDO $pdo, int $orderId, float $amount, array $payload): string
+    {
+        $paymentNo = $this->generatePaymentNo();
+        $payment = $pdo->prepare(
+            'INSERT INTO payments (order_id, payment_no, method, status, amount, transaction_no, request_payload_json, response_payload_json, created_at, updated_at)
+             VALUES (:order_id, :payment_no, :method, :status, :amount, :transaction_no, :request_payload_json, :response_payload_json, :created_at, :updated_at)'
+        );
+        $payment->execute([
+            ':order_id' => $orderId,
+            ':payment_no' => $paymentNo,
+            ':method' => 'wechat',
+            ':status' => 'success',
+            ':amount' => $amount,
+            ':transaction_no' => (string) ($payload['transaction_id'] ?? ''),
+            ':request_payload_json' => '{}',
+            ':response_payload_json' => json_encode_unicode($payload),
+            ':created_at' => now(),
+            ':updated_at' => now(),
+        ]);
+
+        return $paymentNo;
     }
 }
