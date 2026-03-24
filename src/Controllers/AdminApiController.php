@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mall\Controllers;
 
+use Mall\Core\ApiException;
 use Mall\Core\ConfirmRequiredException;
 use Mall\Core\DatabaseManager;
 use Mall\Core\Request;
@@ -169,6 +170,19 @@ class AdminApiController extends BaseController
         });
     }
 
+    public function lockouts(Request $request, array $params = []): Response
+    {
+        return $this->adminRespond(fn (): array => $this->users->listActiveLockouts());
+    }
+
+    public function unlockLockout(Request $request, array $params = []): Response
+    {
+        return $this->adminRespond(function () use ($request, $params): array {
+            $this->validateCsrf($request);
+            return $this->users->unlockLockout((int) ($params['id'] ?? 0), $request);
+        });
+    }
+
     public function members(Request $request, array $params = []): Response
     {
         return $this->adminRespond(fn (): array => $this->membership->searchMembers(
@@ -264,8 +278,10 @@ class AdminApiController extends BaseController
 
             $encryptedMap = [
                 'membership_mysql' => ['password'],
+                'login_security' => [],
                 'wechat_pay' => ['api_v3_key', 'private_key_content', 'public_key_content'],
                 'wechat_service_account' => ['app_secret'],
+                'captcha' => ['app_secret_key', 'secret_id', 'secret_key'],
                 'log' => [],
                 'notifications' => [],
             ];
@@ -274,6 +290,9 @@ class AdminApiController extends BaseController
             unset($values['_csrf_token']);
             if ($group === 'wechat_pay') {
                 $values = $this->mergeWechatPaySensitiveValues($values);
+            }
+            if ($group === 'captcha') {
+                $values = $this->mergeCaptchaSensitiveValues($values);
             }
             $this->settings->saveGroup($group, $values, $encryptedMap[$group] ?? []);
 
@@ -383,6 +402,26 @@ class AdminApiController extends BaseController
 
         if (!empty($values['public_key_content'])) {
             $values['public_key_content'] = $this->normalizeWechatPublicKey((string) $values['public_key_content']);
+        }
+
+        return $values;
+    }
+
+    private function mergeCaptchaSensitiveValues(array $values): array
+    {
+        $current = $this->settings->getGroup('captcha');
+        $sensitiveFields = ['app_secret_key', 'secret_id', 'secret_key'];
+
+        foreach ($sensitiveFields as $field) {
+            $incoming = $values[$field] ?? null;
+            if ($incoming === null || trim((string) $incoming) === '') {
+                if (!empty($current[$field])) {
+                    $values[$field] = (string) $current[$field];
+                }
+                continue;
+            }
+
+            $values[$field] = (string) $incoming;
         }
 
         return $values;
@@ -503,6 +542,13 @@ class AdminApiController extends BaseController
         try {
             $this->users->requireAdmin();
             return $this->json(['success' => true, 'data' => $callback()]);
+        } catch (ApiException $exception) {
+            return $this->json([
+                'success' => false,
+                'error_code' => $exception->errorCode(),
+                'message' => $exception->getMessage(),
+                'data' => $exception->data(),
+            ], $exception->status());
         } catch (ConfirmRequiredException $exception) {
             return $this->json([
                 'success' => false,

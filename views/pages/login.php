@@ -12,18 +12,22 @@
 
         <form @submit.prevent="submit" class="mt-8 space-y-5">
             <label class="block text-sm text-ink/70">
-                用户名或手机号
-                <input x-model="form.username" type="text" class="mt-2 w-full rounded-[1.2rem] border-bronze/15 bg-parchment/50" placeholder="请输入用户名或手机号">
+                手机号 / 管理员账号
+                <input x-model="form.phone" type="text" class="mt-2 w-full rounded-[1.2rem] border-bronze/15 bg-parchment/50" placeholder="普通用户请输入手机号，管理员可输入 lyccc">
             </label>
             <label class="block text-sm text-ink/70">
                 密码
                 <input x-model="form.password" type="password" class="mt-2 w-full rounded-[1.2rem] border-bronze/15 bg-parchment/50" placeholder="请输入密码">
             </label>
-            <button type="submit" class="w-full rounded-full bg-bronze px-5 py-3 text-sm text-white shadow-card transition hover:bg-bronze/90">登录</button>
+            <div x-show="captcha.required" x-cloak class="rounded-[1.2rem] border border-teal/20 bg-teal/6 px-4 py-3 text-sm leading-6 text-teal">
+                登录失败次数较多，提交后会自动弹出腾讯验证码进行校验。
+            </div>
+            <button type="submit" class="w-full rounded-full bg-bronze px-5 py-3 text-sm text-white shadow-card transition hover:bg-bronze/90" x-text="submitting ? '登录中...' : '登录'"></button>
             <button @click.prevent="loginWithWechat" type="button" class="w-full rounded-full border border-teal/25 bg-teal/8 px-5 py-3 text-sm text-teal shadow-card transition hover:border-teal hover:bg-teal/12" x-text="wechat.loading ? '处理中...' : '微信登录'"></button>
         </form>
 
         <div class="mt-5 rounded-[1.3rem] border border-teal/15 bg-teal/5 p-4 text-sm leading-7 text-ink/65">
+            <div class="mb-2">普通用户仍然只能使用手机号登录；管理员可使用手机号或账号 `lyccc` 登录。</div>
             <template x-if="wechat.isWechatClient">
                 <div>
                     <div>当前环境：微信客户端</div>

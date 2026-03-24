@@ -299,6 +299,22 @@ CREATE TABLE IF NOT EXISTS system_logs (
   KEY idx_logs_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='分级系统日志表';
 
+CREATE TABLE IF NOT EXISTS auth_lockouts (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  lock_scope VARCHAR(20) NOT NULL COMMENT '锁定范围：user/ip',
+  identifier VARCHAR(190) NOT NULL COMMENT '用户ID字符串或IP地址',
+  user_id INT DEFAULT NULL COMMENT '关联用户ID',
+  failed_attempts INT NOT NULL DEFAULT 0 COMMENT '累计失败次数',
+  captcha_required TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否要求验证码',
+  locked_until DATETIME DEFAULT NULL COMMENT '锁定截止时间',
+  last_failed_at DATETIME DEFAULT NULL COMMENT '最后失败时间',
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  UNIQUE KEY uniq_auth_lockout_scope_identifier (lock_scope, identifier),
+  KEY idx_auth_lockout_locked_until (locked_until),
+  KEY idx_auth_lockout_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='登录安全锁定表';
+
 INSERT INTO mall_users (id, username, password_hash, nickname, phone, role, openid, membership_member_id, status, last_login_at, created_at, updated_at) VALUES
 (1, 'lyccc', '$2y$10$iZp19nAOm0msC7W76dh00u/WqGW2dSGFuQ/WqghyUzEv.umgLtByS', 'lyccc', '13206335421', 'admin', NULL, 1, 'active', NULL, NOW(), NOW()),
 (2, 'demo_user', '$2y$12$HI463k7fif.ZsDYr6S1XEOoW8yyh/G5Fkblaf57vyXLMjWUWQjk8K', '演示用户', '13900000000', 'customer', NULL, 1, 'active', NULL, NOW(), NOW())
@@ -332,6 +348,9 @@ SELECT '春季花影会员礼遇', '会员绑定后购买指定商品可享折�
 WHERE NOT EXISTS (SELECT 1 FROM activities WHERE title = '春季花影会员礼遇');
 
 INSERT INTO system_settings (setting_group, setting_key, setting_value, is_encrypted, updated_at) VALUES
+('login_security', 'max_failed_attempts', '10', 0, NOW()),
+('login_security', 'lock_minutes', '60', 0, NOW()),
+('captcha', 'trigger_failed_attempts', '3', 0, NOW()),
 ('log', 'min_level', 'info', 0, NOW()),
 ('log', 'retention_days', '30', 0, NOW()),
 ('log', 'max_size_mb', '10', 0, NOW()),

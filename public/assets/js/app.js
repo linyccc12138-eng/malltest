@@ -4,6 +4,7 @@
     const tinymceApiKey = 'esazkmyz3gahrj2teqtvimt91wlrracqp3k2ig8zuushd1n6';
     const tinymceScriptSrc = `https://cdn.tiny.cloud/1/${tinymceApiKey}/tinymce/7/tinymce.min.js`;
     const wechatJssdkScriptSrc = 'https://res.wx.qq.com/open/js/jweixin-1.6.0.js';
+    const tencentCaptchaScriptSrc = 'https://turing.captcha.qcloud.com/TJCaptcha.js';
 
     const getCsrfToken = () => bootstrap.csrfToken || '';
     const formatMoney = (value) => Number(value || 0).toFixed(2);
@@ -662,9 +663,61 @@
         canBindCurrentWechat: Boolean(payload.can_bind_current_wechat),
         canUnbindCurrentWechat: Boolean(payload.can_unbind_current_wechat),
     });
+    const defaultLoginCaptchaState = () => ({
+        enabled: false,
+        appId: '',
+        triggerFailedAttempts: 3,
+        required: false,
+        loading: false,
+        ticket: '',
+        randstr: '',
+    });
     const fetchWechatStatus = async () => {
         const data = await apiRequest('/mall/api/wechat/status');
         return { ...defaultWechatStatus(), ...mapWechatStatus(data) };
+    };
+    const fetchLoginCaptchaConfig = async () => {
+        const data = await apiRequest('/mall/api/auth/captcha-config');
+        return {
+            enabled: Boolean(data.enabled),
+            appId: data.app_id || '',
+            triggerFailedAttempts: Math.max(1, Number(data.trigger_failed_attempts || 3)),
+        };
+    };
+    const openTencentCaptchaPopup = async (appId) => {
+        const normalizedAppId = String(appId || '').trim();
+        if (!normalizedAppId) {
+            throw new Error('腾讯验证码 AppID 未配置。');
+        }
+
+        await loadScriptOnce(tencentCaptchaScriptSrc);
+        if (typeof window.TencentCaptcha !== 'function') {
+            throw new Error('腾讯验证码组件加载失败。');
+        }
+
+        return new Promise((resolve, reject) => {
+            const captcha = new window.TencentCaptcha(normalizedAppId, (result = {}) => {
+                if (Number(result.ret) === 0 && result.ticket && result.randstr) {
+                    resolve({
+                        ticket: String(result.ticket),
+                        randstr: String(result.randstr),
+                    });
+                    return;
+                }
+
+                if (Number(result.ret) === 2) {
+                    reject(new Error('已取消验证码校验。'));
+                    return;
+                }
+
+                reject(new Error('验证码校验未完成，请重试。'));
+            }, {
+                type: 'popup',
+                loading: false,
+            });
+
+            captcha.show();
+        });
     };
     const startWechatOauth = async (scene, returnUrl = `${window.location.pathname}${window.location.search}`) => {
         markWechatOauthAttempted(scene);
@@ -1112,9 +1165,11 @@
 
     const normalizeSettings = (settings = {}) => ({
         membership_mysql: { host: '', port: '3306', database: '', username: '', password: '', charset: 'utf8mb4', ...(settings.membership_mysql || {}) },
+        login_security: { max_failed_attempts: '10', lock_minutes: '60', ...(settings.login_security || {}) },
         log: { min_level: 'info', retention_days: '30', max_size_mb: '10', ...(settings.log || {}) },
         wechat_pay: { app_id: '', merchant_id: '', merchant_serial_no: '', public_key_id: '', pay_mode: 'JSAPI', notify_url: '', api_v3_key: '', private_key_content: '', public_key_content: '', ...(settings.wechat_pay || {}) },
         wechat_service_account: { app_id: '', app_secret: '', ...(settings.wechat_service_account || {}) },
+        captcha: { trigger_failed_attempts: '3', app_id: '', app_secret_key: '', secret_id: '', secret_key: '', ...(settings.captcha || {}) },
         notifications: normalizeNotificationSettings(settings.notifications || {}),
     });
 
@@ -1122,9 +1177,11 @@
 
     const settingsGroupLabels = {
         membership_mysql: '会员系统配置',
+        login_security: '登录安全规则',
         log: '日志配置',
         wechat_pay: '微信支付配置',
         wechat_service_account: '公众号配置',
+        captcha: '腾讯验证码配置',
         notifications: '通知配置',
     };
 
@@ -1136,6 +1193,10 @@
             username: { label: '用户名' },
             password: { label: '密码', sensitive: true },
             charset: { label: '字符集' },
+        },
+        login_security: {
+            max_failed_attempts: { label: '失败次数阈值' },
+            lock_minutes: { label: '锁定时长（分钟）' },
         },
         log: {
             min_level: { label: '最低记录级别' },
@@ -1156,6 +1217,13 @@
         wechat_service_account: {
             app_id: { label: 'AppID' },
             app_secret: { label: 'AppSecret', sensitive: true },
+        },
+        captcha: {
+            trigger_failed_attempts: { label: '失败几次后触发验证码' },
+            app_id: { label: '腾讯验证码 AppID' },
+            app_secret_key: { label: '腾讯验证码 AppSecretKey', sensitive: true, useMetaState: true },
+            secret_id: { label: '腾讯云 SecretId', sensitive: true, useMetaState: true },
+            secret_key: { label: '腾讯云 SecretKey', sensitive: true, useMetaState: true },
         },
         notifications: {
             admin_paid_template_id: { label: '管理员付款模板 ID' },
@@ -1230,6 +1298,7 @@
     const defaultMemberForm = () => ({ id: null, fnumber: '', fname: '', fclassesid: '', fclassesname: '', initial_amount: 0, fbalance: 0, fmark: '', adjust_amount: '', adjust_mark: '' });
     const defaultShipOrderForm = () => ({ id: null, order_no: '', shipping_company: '顺丰速运', shipping_no: '' });
     const defaultCloseOrderForm = () => ({ id: null, order_no: '', reason: '管理后台关闭订单' });
+    const defaultLockouts = () => ({ users: [], ips: [] });
 
     window.MallUtils = { formatMoney, notice, apiRequest, loadScriptOnce };
 
@@ -1282,7 +1351,9 @@
     document.addEventListener('alpine:init', () => {
         Alpine.data('loginPage', () => ({
             form: { phone: '', password: '' },
+            submitting: false,
             wechat: { ...defaultWechatStatus(), loading: false },
+            captcha: defaultLoginCaptchaState(),
             init() {
                 void this.bootstrapWechat();
             },
@@ -1335,13 +1406,46 @@
                 });
                 notice('微信绑定成功。');
             },
-            async submit() {
+            async ensureCaptchaConfig() {
+                const config = await fetchLoginCaptchaConfig();
+                this.captcha = {
+                    ...this.captcha,
+                    ...config,
+                };
+                return this.captcha;
+            },
+            async openCaptchaAndRetry() {
+                const config = await this.ensureCaptchaConfig();
+                if (!config.enabled || !config.appId) {
+                    throw new Error('腾讯验证码未配置，请联系管理员。');
+                }
+
+                this.captcha.loading = true;
                 try {
-                    this.wechat.loading = true;
+                    const result = await openTencentCaptchaPopup(config.appId);
+                    this.captcha.ticket = result.ticket;
+                    this.captcha.randstr = result.randstr;
+                    await this.submit(true);
+                } finally {
+                    this.captcha.loading = false;
+                }
+            },
+            buildLoginPayload() {
+                const payload = { ...this.form };
+                if (this.captcha.ticket && this.captcha.randstr) {
+                    payload.captcha_ticket = this.captcha.ticket;
+                    payload.captcha_randstr = this.captcha.randstr;
+                }
+                return payload;
+            },
+            async submit(skipCaptchaPopup = false) {
+                try {
+                    this.submitting = true;
                     const data = await apiRequest('/mall/api/auth/login', {
                         method: 'POST',
-                        body: this.form,
+                        body: this.buildLoginPayload(),
                     });
+                    this.captcha = { ...defaultLoginCaptchaState(), enabled: this.captcha.enabled, appId: this.captcha.appId, triggerFailedAttempts: this.captcha.triggerFailedAttempts };
                     try {
                         await this.maybeBindCurrentWechatAfterLogin();
                     } catch (bindError) {
@@ -1350,13 +1454,41 @@
                     notice('登录成功。');
                     window.location.href = data.user.role === 'admin' ? '/mall/admin' : '/mall';
                 } catch (error) {
+                    if (error.errorCode === 'captcha_required') {
+                        this.captcha.required = true;
+                        try {
+                            await this.ensureCaptchaConfig();
+                            if (!skipCaptchaPopup) {
+                                await this.openCaptchaAndRetry();
+                            }
+                        } catch (captchaError) {
+                            notice(captchaError.message, 'error');
+                        }
+                        return;
+                    }
+
+                    if (error.errorCode === 'captcha_invalid') {
+                        this.captcha.required = true;
+                        this.captcha.ticket = '';
+                        this.captcha.randstr = '';
+                        notice(error.message, 'error');
+                        if (!skipCaptchaPopup) {
+                            try {
+                                await this.openCaptchaAndRetry();
+                            } catch (captchaError) {
+                                notice(captchaError.message, 'error');
+                            }
+                        }
+                        return;
+                    }
+
                     notice(error.message, 'error');
                 } finally {
-                    this.wechat.loading = false;
+                    this.submitting = false;
                 }
             },
             async loginWithWechat() {
-                if (this.wechat.loading) {
+                if (this.wechat.loading || this.submitting) {
                     return;
                 }
                 try {
@@ -2877,6 +3009,7 @@
                 { key: 'categories', label: '分类管理' },
                 { key: 'orders', label: '订单管理' },
                 { key: 'users', label: '用户管理' },
+                { key: 'locks', label: '锁定管理' },
                 { key: 'members', label: '会员联动' },
                 { key: 'activities', label: '活动管理' },
                 { key: 'settings', label: '系统设置' },
@@ -2918,6 +3051,7 @@
             userMemberKeyword: '',
             memberSearchTimer: null,
             memberOptions: [],
+            lockouts: defaultLockouts(),
             members: [],
             memberClasses: [],
             memberForm: defaultMemberForm(),
@@ -2977,6 +3111,9 @@
             wechatPayFieldPlaceholder(field, fallback = '') {
                 return this.settingsMeta?.wechat_pay?.[field] ? '已配置，留空则保持不变' : fallback;
             },
+            captchaFieldPlaceholder(field, fallback = '') {
+                return this.settingsMeta?.captcha?.[field] ? '已配置，留空则保持不变' : fallback;
+            },
             confirmSettingsSave(groupKey, payload) {
                 const message = buildSettingsConfirmMessage(
                     groupKey,
@@ -3013,6 +3150,22 @@
                         },
                     };
                 }
+
+                if (groupKey === 'captcha') {
+                    const configuredFields = ['app_secret_key', 'secret_id', 'secret_key'];
+                    this.settingsMeta = {
+                        ...this.settingsMeta,
+                        captcha: {
+                            ...(this.settingsMeta?.captcha || {}),
+                            ...configuredFields.reduce((bucket, field) => {
+                                if (String(payload?.[field] ?? '').trim() !== '') {
+                                    bucket[field] = true;
+                                }
+                                return bucket;
+                            }, {}),
+                        },
+                    };
+                }
             },
             async ensureTabLoaded(tab) {
                 if (this.loadedTabs[tab]) {
@@ -3024,6 +3177,7 @@
                 if (tab === 'categories') await this.loadCategories();
                 if (tab === 'orders') await this.loadAdminOrders();
                 if (tab === 'users') await this.loadUsers();
+                if (tab === 'locks') await this.loadLockouts();
                 if (tab === 'members') await this.loadMembers();
                 if (tab === 'activities') await this.loadActivities();
                 if (tab === 'logs') await this.loadLogs();
@@ -3352,6 +3506,35 @@
                     notice(error.message, 'error');
                 }
             },
+            async loadLockouts() {
+                try {
+                    const payload = await apiRequest('/mall/api/admin/lockouts');
+                    this.lockouts = {
+                        users: payload.users || [],
+                        ips: payload.ips || [],
+                    };
+                } catch (error) {
+                    notice(error.message, 'error');
+                }
+            },
+            async unlockLockout(item) {
+                const scopeLabel = item?.lock_scope === 'user' ? '账号' : 'IP';
+                const identity = item?.label || item?.phone || item?.identifier || '当前记录';
+                if (!window.confirm(`确认手工解锁${scopeLabel}“${identity}”吗？`)) {
+                    return;
+                }
+
+                try {
+                    await apiRequest(`/mall/api/admin/lockouts/${item.id}/unlock`, {
+                        method: 'POST',
+                        body: {},
+                    });
+                    notice('锁定记录已解除。');
+                    await this.loadLockouts();
+                } catch (error) {
+                    notice(error.message, 'error');
+                }
+            },
             async loadMemberOptions(keyword = '') {
                 try {
                     const query = new URLSearchParams({
@@ -3613,6 +3796,19 @@
                     notice(error.message, 'error');
                 }
             },
+            async saveLoginSecuritySettings() {
+                const payload = { ...this.settings.login_security };
+                if (!this.confirmSettingsSave('login_security', payload)) {
+                    return;
+                }
+                try {
+                    await apiRequest('/mall/api/admin/settings/login_security', { method: 'POST', body: payload });
+                    this.markSettingsSaved('login_security', payload);
+                    notice('登录安全规则已保存。');
+                } catch (error) {
+                    notice(error.message, 'error');
+                }
+            },
             async saveLogSettings() {
                 const payload = { ...this.settings.log };
                 if (!this.confirmSettingsSave('log', payload)) {
@@ -3648,6 +3844,19 @@
                     await apiRequest('/mall/api/admin/settings/wechat_service_account', { method: 'POST', body: payload });
                     this.markSettingsSaved('wechat_service_account', payload);
                     notice('公众号配置已保存。');
+                } catch (error) {
+                    notice(error.message, 'error');
+                }
+            },
+            async saveCaptchaSettings() {
+                const payload = { ...this.settings.captcha };
+                if (!this.confirmSettingsSave('captcha', payload)) {
+                    return;
+                }
+                try {
+                    await apiRequest('/mall/api/admin/settings/captcha', { method: 'POST', body: payload });
+                    this.markSettingsSaved('captcha', payload);
+                    notice('腾讯验证码配置已保存。');
                 } catch (error) {
                     notice(error.message, 'error');
                 }

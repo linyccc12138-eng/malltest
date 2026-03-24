@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mall\Controllers;
 
+use Mall\Core\ApiException;
 use Mall\Core\Request;
 use Mall\Core\Response;
 use Mall\Services\CatalogService;
@@ -50,6 +51,11 @@ class ApiController extends BaseController
 
             return ['user' => $result];
         });
+    }
+
+    public function loginCaptchaConfig(Request $request, array $params = []): Response
+    {
+        return $this->respond(fn (): array => $this->users->loginCaptchaConfig());
     }
 
     public function wechatLogin(Request $request, array $params = []): Response
@@ -623,6 +629,13 @@ class ApiController extends BaseController
     {
         try {
             return $this->json(['success' => true, 'data' => $callback()]);
+        } catch (ApiException $exception) {
+            return $this->json([
+                'success' => false,
+                'error_code' => $exception->errorCode(),
+                'message' => $exception->getMessage(),
+                'data' => $exception->data(),
+            ], $exception->status());
         } catch (\Throwable $throwable) {
             return $this->json([
                 'success' => false,

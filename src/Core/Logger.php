@@ -111,7 +111,7 @@ class Logger
 
     private function shouldBypassLevel(string $channel): bool
     {
-        return in_array($channel, ['wechat_auth'], true);
+        return in_array($channel, ['wechat_auth', 'auth_security', 'captcha'], true);
     }
 
     private function rotateIfNeeded(string $file): void

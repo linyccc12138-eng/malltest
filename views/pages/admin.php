@@ -299,7 +299,7 @@
                         <div class="flex items-start justify-between gap-3">
                             <div class="min-w-0">
                                 <div class="flex flex-wrap items-center gap-2">
-                                    <div class="font-medium text-ink" x-text="item.nickname || item.username"></div>
+                                    <div class="font-medium text-ink" x-text="item.nickname || item.phone || '未命名用户'"></div>
                                     <span
                                         :class="item.status === 'active' ? 'bg-sage/10 text-sage' : 'bg-rose/10 text-rose'"
                                         class="rounded-full px-2.5 py-1 text-xs"
@@ -350,6 +350,84 @@
                     </template>
                     <button @click="setPagerPage('userPager', userPager.page + 1, 'loadUsers')" :disabled="userPager.page >= userPager.total_pages" class="rounded-full border border-bronze/15 px-3 py-2 text-sm text-bronze disabled:cursor-not-allowed disabled:opacity-40">下一页</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div x-show="activeTab === 'locks'" class="space-y-6" x-cloak>
+        <div class="rounded-[1.8rem] border border-bronze/10 bg-white/80 p-5 shadow-card">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h2 class="font-display text-2xl text-ink">锁定管理</h2>
+                    <p class="mt-2 text-sm text-ink/60">这里会显示当前被自动锁定的账号和 IP。管理员可手工解除锁定，便于快速恢复登录。</p>
+                </div>
+                <button @click="loadLockouts()" class="rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">刷新列表</button>
+            </div>
+
+            <div class="mt-5 grid gap-5 xl:grid-cols-2">
+                <section class="rounded-[1.5rem] border border-bronze/10 bg-parchment/45 p-4">
+                    <div class="flex items-center justify-between gap-3">
+                        <h3 class="font-display text-xl text-ink">已锁定用户</h3>
+                        <div class="text-sm text-ink/55">共 <span x-text="lockouts.users.length"></span> 条</div>
+                    </div>
+                    <div class="mt-4 space-y-3" x-show="lockouts.users.length">
+                        <template x-for="item in lockouts.users" :key="`lock-user-${item.id}`">
+                            <article class="rounded-[1.2rem] border border-bronze/10 bg-white/80 p-4">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="min-w-0">
+                                        <div class="font-medium text-ink" x-text="item.label"></div>
+                                        <div class="mt-1 text-sm text-ink/55">
+                                            用户 ID <span x-text="item.user_id || '-'"></span>
+                                            <span class="mx-1">/</span>
+                                            失败次数 <span x-text="item.failed_attempts"></span>
+                                        </div>
+                                        <div class="mt-1 text-sm text-ink/55">
+                                            锁定至 <span class="text-ink" x-text="item.locked_until || '-'"></span>
+                                        </div>
+                                        <div class="mt-1 text-sm text-ink/55">
+                                            最后失败时间 <span class="text-ink" x-text="item.last_failed_at || '-'"></span>
+                                        </div>
+                                    </div>
+                                    <button @click="unlockLockout(item)" class="rounded-full border border-sage/20 px-3 py-2 text-xs text-sage">手工解锁</button>
+                                </div>
+                            </article>
+                        </template>
+                    </div>
+                    <div x-show="!lockouts.users.length" class="mt-4 rounded-[1.2rem] border border-dashed border-bronze/15 bg-white/70 px-4 py-6 text-center text-sm text-ink/55">
+                        当前没有被锁定的用户账号。
+                    </div>
+                </section>
+
+                <section class="rounded-[1.5rem] border border-bronze/10 bg-parchment/45 p-4">
+                    <div class="flex items-center justify-between gap-3">
+                        <h3 class="font-display text-xl text-ink">已锁定 IP</h3>
+                        <div class="text-sm text-ink/55">共 <span x-text="lockouts.ips.length"></span> 条</div>
+                    </div>
+                    <div class="mt-4 space-y-3" x-show="lockouts.ips.length">
+                        <template x-for="item in lockouts.ips" :key="`lock-ip-${item.id}`">
+                            <article class="rounded-[1.2rem] border border-bronze/10 bg-white/80 p-4">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="min-w-0">
+                                        <div class="font-medium text-ink" x-text="item.label"></div>
+                                        <div class="mt-1 text-sm text-ink/55">
+                                            失败次数 <span x-text="item.failed_attempts"></span>
+                                        </div>
+                                        <div class="mt-1 text-sm text-ink/55">
+                                            锁定至 <span class="text-ink" x-text="item.locked_until || '-'"></span>
+                                        </div>
+                                        <div class="mt-1 text-sm text-ink/55">
+                                            最后失败时间 <span class="text-ink" x-text="item.last_failed_at || '-'"></span>
+                                        </div>
+                                    </div>
+                                    <button @click="unlockLockout(item)" class="rounded-full border border-sage/20 px-3 py-2 text-xs text-sage">手工解锁</button>
+                                </div>
+                            </article>
+                        </template>
+                    </div>
+                    <div x-show="!lockouts.ips.length" class="mt-4 rounded-[1.2rem] border border-dashed border-bronze/15 bg-white/70 px-4 py-6 text-center text-sm text-ink/55">
+                        当前没有被锁定的 IP 地址。
+                    </div>
+                </section>
             </div>
         </div>
     </div>
@@ -465,6 +543,16 @@
                     </div>
                 </form>
 
+                <form @submit.prevent="saveLoginSecuritySettings" class="space-y-4 border-t border-bronze/10 pt-6">
+                    <h2 class="font-display text-2xl text-ink">登录安全规则</h2>
+                    <label class="block text-sm text-ink/70">失败次数阈值<input x-model="settings.login_security.max_failed_attempts" type="number" min="1" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
+                    <label class="block text-sm text-ink/70">锁定时长（分钟）<input x-model="settings.login_security.lock_minutes" type="number" min="1" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
+                    <div class="rounded-[1.2rem] border border-bronze/10 bg-parchment/45 px-4 py-3 text-sm leading-6 text-ink/60">
+                        当同一账号或同一 IP 在设定次数内连续登录失败时，系统会自动锁定，并在后台“锁定管理”中显示。
+                    </div>
+                    <button type="submit" class="rounded-full bg-sage px-4 py-2 text-sm text-white">保存登录规则</button>
+                </form>
+
                 <form @submit.prevent="saveLogSettings" class="space-y-4 border-t border-bronze/10 pt-6">
                     <h2 class="font-display text-2xl text-ink">日志配置</h2>
                     <label class="block text-sm text-ink/70">
@@ -507,6 +595,19 @@
                         <button type="submit" class="rounded-full bg-bronze px-4 py-2 text-sm text-white">保存公众号配置</button>
                         <button type="button" @click="testServiceAccount()" class="rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">测试配置</button>
                     </div>
+                </form>
+
+                <form @submit.prevent="saveCaptchaSettings" class="space-y-4 border-t border-bronze/10 pt-6">
+                    <h2 class="font-display text-2xl text-ink">腾讯验证码配置</h2>
+                    <label class="block text-sm text-ink/70">失败几次后触发验证码<input x-model="settings.captcha.trigger_failed_attempts" type="number" min="1" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
+                    <label class="block text-sm text-ink/70">腾讯验证码 AppID<input x-model="settings.captcha.app_id" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
+                    <label class="block text-sm text-ink/70">腾讯验证码 AppSecretKey<input x-model="settings.captcha.app_secret_key" type="password" :placeholder="captchaFieldPlaceholder('app_secret_key')" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
+                    <label class="block text-sm text-ink/70">腾讯云 SecretId<input x-model="settings.captcha.secret_id" type="password" :placeholder="captchaFieldPlaceholder('secret_id')" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
+                    <label class="block text-sm text-ink/70">腾讯云 SecretKey<input x-model="settings.captcha.secret_key" type="password" :placeholder="captchaFieldPlaceholder('secret_key')" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
+                    <div class="rounded-[1.2rem] border border-bronze/10 bg-parchment/45 px-4 py-3 text-sm leading-6 text-ink/60">
+                        AppID 和 AppSecretKey 用于启用前端验证码；SecretId 和 SecretKey 用于开启服务端结果校验，留空时会仅信任前端验证结果并写入日志。
+                    </div>
+                    <button type="submit" class="rounded-full bg-teal px-4 py-2 text-sm text-white">保存验证码配置</button>
                 </form>
             </div>
         </div>
@@ -635,10 +736,6 @@
                     <button @click="closeUserModal()" type="button" class="rounded-full border border-bronze/15 px-3 py-2 text-sm text-bronze">关闭</button>
                 </div>
                 <form @submit.prevent="saveUser" class="mt-5 space-y-4">
-                    <label class="block text-sm text-ink/70">
-                        用户名
-                        <input x-model="userForm.username" type="text" autocomplete="off" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" required>
-                    </label>
                     <label class="block text-sm text-ink/70">
                         昵称
                         <input x-model="userForm.nickname" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55">

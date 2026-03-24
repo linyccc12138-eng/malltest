@@ -40,8 +40,9 @@ $csrf = new Mall\Core\CsrfManager($session);
 $sanitizer = new Mall\Core\HtmlSanitizer();
 
 $settingsService = new Mall\Services\SettingsService($db, $crypto, $logger);
+$captchaService = new Mall\Services\CaptchaService($settingsService, $logger);
 $membershipService = new Mall\Services\MembershipService($db, $logger, $settingsService);
-$userService = new Mall\Services\UserService($db, $session, $logger, $rateLimiter);
+$userService = new Mall\Services\UserService($db, $session, $logger, $rateLimiter, $settingsService, $captchaService);
 $catalogService = new Mall\Services\CatalogService($db, $sanitizer);
 $wechatService = new Mall\Services\WechatService($settingsService, $logger);
 $notificationService = new Mall\Services\NotificationService($db, $wechatService, $settingsService, $logger);
@@ -58,6 +59,7 @@ $app->instance('logger', $logger);
 $app->instance('csrf', $csrf);
 $app->instance('sanitizer', $sanitizer);
 $app->instance('settings', $settingsService);
+$app->instance('captcha', $captchaService);
 $app->instance('membership', $membershipService);
 $app->instance('users', $userService);
 $app->instance('catalog', $catalogService);
@@ -92,6 +94,7 @@ $router->get('/mall/admin/activities/edit', [$pageController, 'adminActivityEdit
 
 $router->get('/mall/api/session', [$apiController, 'session']);
 $router->post('/mall/api/auth/login', [$apiController, 'login']);
+$router->get('/mall/api/auth/captcha-config', [$apiController, 'loginCaptchaConfig']);
 $router->post('/mall/api/auth/wechat-login', [$apiController, 'wechatLogin']);
 $router->post('/mall/api/auth/logout', [$apiController, 'logout']);
 $router->get('/mall/api/products', [$apiController, 'products']);
@@ -156,6 +159,8 @@ $router->post('/mall/api/admin/users', [$adminApiController, 'saveUser']);
 $router->put('/mall/api/admin/users/{id}', [$adminApiController, 'saveUser']);
 $router->post('/mall/api/admin/users/{id}/status', [$adminApiController, 'updateUserStatus']);
 $router->post('/mall/api/admin/users/{id}/reset-password', [$adminApiController, 'resetUserPassword']);
+$router->get('/mall/api/admin/lockouts', [$adminApiController, 'lockouts']);
+$router->post('/mall/api/admin/lockouts/{id}/unlock', [$adminApiController, 'unlockLockout']);
 $router->get('/mall/api/admin/members', [$adminApiController, 'members']);
 $router->get('/mall/api/admin/member-classes', [$adminApiController, 'memberClasses']);
 $router->post('/mall/api/admin/members', [$adminApiController, 'saveMember']);

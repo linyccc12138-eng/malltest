@@ -102,15 +102,20 @@ class SettingsService
     {
         $wechatPay = array_merge($this->defaults()['wechat_pay'], $this->getGroup('wechat_pay'));
         $wechatPaySensitive = ['merchant_serial_no', 'public_key_id', 'api_v3_key', 'private_key_content', 'public_key_content'];
+        $captcha = array_merge($this->defaults()['captcha'], $this->getGroup('captcha'));
+        $captchaSensitive = ['app_secret_key', 'secret_id', 'secret_key'];
 
         return [
             'membership_mysql' => array_merge($this->defaults()['membership_mysql'], $this->getGroup('membership_mysql')),
+            'login_security' => array_merge($this->defaults()['login_security'], $this->getGroup('login_security')),
             'wechat_pay' => $this->maskAdminSensitiveFields($wechatPay, $wechatPaySensitive),
             'wechat_service_account' => array_merge($this->defaults()['wechat_service_account'], $this->getGroup('wechat_service_account')),
+            'captcha' => $this->maskAdminSensitiveFields($captcha, $captchaSensitive),
             'log' => array_merge($this->defaults()['log'], $this->getGroup('log')),
             'notifications' => array_merge($this->defaults()['notifications'], $this->getGroup('notifications')),
             '__meta' => [
                 'wechat_pay' => $this->adminConfiguredState($wechatPay, $wechatPaySensitive),
+                'captcha' => $this->adminConfiguredState($captcha, $captchaSensitive),
             ],
         ];
     }
@@ -168,6 +173,10 @@ class SettingsService
                 'password' => '',
                 'charset' => 'utf8mb4',
             ],
+            'login_security' => [
+                'max_failed_attempts' => '10',
+                'lock_minutes' => '60',
+            ],
             'wechat_pay' => [
                 'app_id' => '',
                 'merchant_id' => '',
@@ -182,6 +191,13 @@ class SettingsService
             'wechat_service_account' => [
                 'app_id' => '',
                 'app_secret' => '',
+            ],
+            'captcha' => [
+                'trigger_failed_attempts' => '3',
+                'app_id' => '',
+                'app_secret_key' => '',
+                'secret_id' => '',
+                'secret_key' => '',
             ],
             'log' => [
                 'min_level' => 'info',
