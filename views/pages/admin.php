@@ -487,11 +487,13 @@
                     <label class="block text-sm text-ink/70">AppID<input x-model="settings.wechat_pay.app_id" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
                     <label class="block text-sm text-ink/70">商户号<input x-model="settings.wechat_pay.merchant_id" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
                     <label class="block text-sm text-ink/70">商户证书序列号<input x-model="settings.wechat_pay.merchant_serial_no" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
+                    <label class="block text-sm text-ink/70">微信支付公钥ID<input x-model="settings.wechat_pay.public_key_id" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" placeholder="PUB_KEY_ID_..."></label>
                     <label class="block text-sm text-ink/70">支付模式<select x-model="settings.wechat_pay.pay_mode" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"><option value="JSAPI">JSAPI</option><option value="H5">H5</option></select></label>
                     <label class="block text-sm text-ink/70">通知地址<input x-model="settings.wechat_pay.notify_url" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
                     <label class="block text-sm text-ink/70">APIv3 Key<input x-model="settings.wechat_pay.api_v3_key" type="password" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></label>
                     <label class="block text-sm text-ink/70">商户私钥<textarea x-model="settings.wechat_pay.private_key_content" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></textarea></label>
-                    <label class="block text-sm text-ink/70">平台证书<textarea x-model="settings.wechat_pay.platform_cert_content" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></textarea></label>
+                    <label class="block text-sm text-ink/70">微信支付公钥<textarea x-model="settings.wechat_pay.public_key_content" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></textarea></label>
+                    <label class="block text-sm text-ink/70">旧平台证书（灰度回调兼容，可选）<textarea x-model="settings.wechat_pay.platform_cert_content" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></textarea></label>
                     <div class="flex gap-2">
                         <button type="submit" class="rounded-full bg-teal px-4 py-2 text-sm text-white">保存支付配置</button>
                         <button type="button" @click="testWechatPay()" class="rounded-full border border-teal/15 px-4 py-2 text-sm text-teal">测试配置</button>

@@ -111,6 +111,7 @@ class WechatService
     {
         $config = $this->payConfig();
         $this->assertPayFields($config, ['app_id', 'merchant_id', 'merchant_serial_no', 'api_v3_key', 'private_key_content', 'notify_url']);
+        $this->assertPayVerificationConfig($config);
 
         $mode = strtoupper((string) ($config['pay_mode'] ?? 'JSAPI'));
         $payload = [
@@ -187,7 +188,8 @@ class WechatService
     public function handlePayNotify(array $headers, string $body): array
     {
         $config = $this->payConfig();
-        $this->assertPayFields($config, ['api_v3_key', 'platform_cert_content']);
+        $this->assertPayFields($config, ['api_v3_key']);
+        $this->assertPayVerificationConfig($config);
         $this->verifyNotifySignature($headers, $body, $config);
 
         $payload = json_decode($body, true);
@@ -217,6 +219,7 @@ class WechatService
     {
         $config = $this->payConfig();
         $this->assertPayFields($config, ['merchant_id', 'merchant_serial_no', 'private_key_content']);
+        $this->assertPayVerificationConfig($config);
         $normalized = trim($outTradeNo);
         if ($normalized === '') {
             throw new \RuntimeException('缺少商户订单号。');
@@ -232,6 +235,7 @@ class WechatService
     {
         $config = $this->payConfig();
         $this->assertPayFields($config, ['merchant_id', 'merchant_serial_no', 'private_key_content']);
+        $this->assertPayVerificationConfig($config);
         $normalized = trim($outTradeNo);
         if ($normalized === '') {
             throw new \RuntimeException('缺少商户订单号。');
@@ -246,6 +250,7 @@ class WechatService
     public function testPayConfig(array $config): array
     {
         $this->assertPayFields($config, ['app_id', 'merchant_id', 'merchant_serial_no', 'api_v3_key', 'private_key_content']);
+        $this->assertPayVerificationConfig($config);
         $response = $this->wechatPayRequest('GET', 'https://api.mch.weixin.qq.com/v3/certificates', null, $config);
 
         return [
@@ -435,36 +440,39 @@ class WechatService
 
     private function verifyNotifySignature(array $headers, string $body, array $config): void
     {
+        $this->verifyWechatSignature($headers, $body, $config, '微信支付通知');
+    }
+
+    private function verifyResponseSignature(array $headers, string $body, array $config): void
+    {
+        $this->verifyWechatSignature($headers, $body, $config, '微信支付应答');
+    }
+
+    private function verifyWechatSignature(array $headers, string $body, array $config, string $scene): void
+    {
         $timestamp = $this->headerValue($headers, ['HTTP_WECHATPAY_TIMESTAMP', 'Wechatpay-Timestamp', 'wechatpay-timestamp']);
         $nonce = $this->headerValue($headers, ['HTTP_WECHATPAY_NONCE', 'Wechatpay-Nonce', 'wechatpay-nonce']);
         $signature = $this->headerValue($headers, ['HTTP_WECHATPAY_SIGNATURE', 'Wechatpay-Signature', 'wechatpay-signature']);
         $serial = $this->headerValue($headers, ['HTTP_WECHATPAY_SERIAL', 'Wechatpay-Serial', 'wechatpay-serial']);
 
         if ($timestamp === '' || $nonce === '' || $signature === '' || $serial === '') {
-            throw new \RuntimeException('微信支付通知验签头缺失。');
+            throw new \RuntimeException($scene . '验签头缺失。');
         }
         if (!ctype_digit($timestamp) || abs(time() - (int) $timestamp) > 300) {
-            throw new \RuntimeException('微信支付通知时间戳无效。');
+            throw new \RuntimeException($scene . '时间戳无效。');
         }
 
         $message = $timestamp . "\n" . $nonce . "\n" . $body . "\n";
-        $publicKey = $this->publicKeyFromCertificate((string) $config['platform_cert_content']);
-        if ($publicKey === false) {
-            throw new \RuntimeException('微信支付平台证书内容无效。');
-        }
-        $platformSerial = $this->certificateSerial((string) $config['platform_cert_content']);
-        if ($platformSerial === null || !$this->serialEquals($platformSerial, $serial)) {
-            throw new \RuntimeException('微信支付通知证书序列号不匹配。');
-        }
+        $publicKey = $this->resolveWechatPayPublicKey($serial, $config);
 
         $decodedSignature = base64_decode($signature, true);
         if ($decodedSignature === false) {
-            throw new \RuntimeException('微信支付通知签名格式无效。');
+            throw new \RuntimeException($scene . '签名格式无效。');
         }
 
         $verified = openssl_verify($message, $decodedSignature, $publicKey, OPENSSL_ALGO_SHA256);
         if ($verified !== 1) {
-            throw new \RuntimeException('微信支付通知验签失败。');
+            throw new \RuntimeException($scene . '验签失败。');
         }
     }
 
@@ -492,7 +500,36 @@ class WechatService
         return $decoded;
     }
 
-    private function publicKeyFromCertificate(string $certificateContent): mixed
+    private function resolveWechatPayPublicKey(string $serial, array $config): mixed
+    {
+        $publicKeyId = trim((string) ($config['public_key_id'] ?? ''));
+        $publicKeyContent = trim((string) ($config['public_key_content'] ?? ''));
+        if ($publicKeyId !== '' && $publicKeyContent !== '' && hash_equals($publicKeyId, trim($serial))) {
+            $publicKey = $this->publicKeyFromMaterial($publicKeyContent);
+            if ($publicKey === false) {
+                throw new \RuntimeException('微信支付公钥内容无效。');
+            }
+
+            return $publicKey;
+        }
+
+        $platformCertContent = trim((string) ($config['platform_cert_content'] ?? ''));
+        if ($platformCertContent !== '') {
+            $platformSerial = $this->certificateSerial($platformCertContent);
+            if ($platformSerial !== null && $this->serialEquals($platformSerial, $serial)) {
+                $publicKey = $this->publicKeyFromMaterial($platformCertContent);
+                if ($publicKey === false) {
+                    throw new \RuntimeException('微信支付平台证书内容无效。');
+                }
+
+                return $publicKey;
+            }
+        }
+
+        throw new \RuntimeException('未找到与 Wechatpay-Serial 匹配的验签材料。');
+    }
+
+    private function publicKeyFromMaterial(string $certificateContent): mixed
     {
         $publicKey = openssl_pkey_get_public($certificateContent);
         if ($publicKey !== false) {
@@ -572,11 +609,28 @@ class WechatService
         }
     }
 
+    private function assertPayVerificationConfig(array $config): void
+    {
+        $hasPublicKey = !empty($config['public_key_id']) && !empty($config['public_key_content']);
+        $hasPlatformCert = !empty($config['platform_cert_content']);
+        if (!$hasPublicKey && !$hasPlatformCert) {
+            throw new \RuntimeException('缺少微信支付验签材料：请配置微信支付公钥，灰度期可临时保留旧平台证书。');
+        }
+    }
+
     private function headerValue(array $headers, array $candidates): string
     {
+        $normalized = [];
+        foreach ($headers as $key => $value) {
+            $normalized[strtolower((string) $key)] = is_array($value)
+                ? implode(',', array_map('strval', $value))
+                : (string) $value;
+        }
+
         foreach ($candidates as $candidate) {
-            if (isset($headers[$candidate]) && $headers[$candidate] !== '') {
-                return (string) $headers[$candidate];
+            $lookupKey = strtolower($candidate);
+            if (isset($normalized[$lookupKey]) && $normalized[$lookupKey] !== '') {
+                return $normalized[$lookupKey];
             }
         }
 
@@ -613,17 +667,58 @@ class WechatService
             'Content-Type: application/json',
             'User-Agent: magic-mall/1.0',
         ];
+        $verificationSerial = $this->responseVerificationSerial($config);
+        if ($verificationSerial !== null) {
+            $headers[] = 'Wechatpay-Serial: ' . $verificationSerial;
+        }
 
-        return $this->httpJson($method, $url, $payload, $headers);
+        return $this->httpJson($method, $url, $payload, $headers, $config);
     }
 
-    private function httpJson(string $method, string $url, ?array $payload = null, array $headers = []): array
+    private function responseVerificationSerial(array $config): ?string
+    {
+        $publicKeyId = trim((string) ($config['public_key_id'] ?? ''));
+        if ($publicKeyId !== '' && !empty($config['public_key_content'])) {
+            return $publicKeyId;
+        }
+
+        $platformCertContent = trim((string) ($config['platform_cert_content'] ?? ''));
+        if ($platformCertContent === '') {
+            return null;
+        }
+
+        return $this->certificateSerial($platformCertContent);
+    }
+
+    private function httpJson(string $method, string $url, ?array $payload = null, array $headers = [], ?array $wechatPayConfig = null): array
     {
         if (function_exists('curl_init')) {
             $ch = curl_init($url);
+            $responseHeaders = [];
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_CUSTOMREQUEST, strtoupper($method));
             curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_HEADERFUNCTION, static function ($handle, string $headerLine) use (&$responseHeaders): int {
+                $trimmed = trim($headerLine);
+                if ($trimmed === '' || str_starts_with($trimmed, 'HTTP/')) {
+                    return strlen($headerLine);
+                }
+
+                $parts = explode(':', $trimmed, 2);
+                if (count($parts) !== 2) {
+                    return strlen($headerLine);
+                }
+
+                $name = trim($parts[0]);
+                $value = trim($parts[1]);
+                if ($name !== '') {
+                    $responseHeaders[$name] = isset($responseHeaders[$name])
+                        ? $responseHeaders[$name] . ',' . $value
+                        : $value;
+                }
+
+                return strlen($headerLine);
+            });
             if ($payload !== null) {
                 curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode_unicode($payload));
             }
@@ -641,6 +736,9 @@ class WechatService
             if (!is_array($decoded)) {
                 $decoded = [];
             }
+            if ($statusCode < 400 && str_starts_with($url, 'https://api.mch.weixin.qq.com/') && $wechatPayConfig !== null) {
+                $this->verifyResponseSignature($responseHeaders, (string) $result, $wechatPayConfig);
+            }
             if ($statusCode >= 400) {
                 throw new \RuntimeException('微信接口返回错误：' . ($decoded['message'] ?? $decoded['errmsg'] ?? $statusCode));
             }
@@ -657,7 +755,33 @@ class WechatService
             ],
         ];
         $result = file_get_contents($url, false, stream_context_create($context));
+        $responseHeaders = [];
+        $statusCode = 200;
+        foreach ($http_response_header ?? [] as $line) {
+            $trimmed = trim((string) $line);
+            if ($trimmed === '') {
+                continue;
+            }
+
+            if (str_starts_with($trimmed, 'HTTP/')) {
+                if (preg_match('/\s(\d{3})\s/', $trimmed, $matches)) {
+                    $statusCode = (int) $matches[1];
+                }
+                continue;
+            }
+
+            $parts = explode(':', $trimmed, 2);
+            if (count($parts) !== 2) {
+                continue;
+            }
+
+            $responseHeaders[trim($parts[0])] = trim($parts[1]);
+        }
         $decoded = json_decode((string) $result, true);
+        if ($statusCode < 400 && str_starts_with($url, 'https://api.mch.weixin.qq.com/') && $wechatPayConfig !== null) {
+            $this->verifyResponseSignature($responseHeaders, (string) $result, $wechatPayConfig);
+        }
+
         return is_array($decoded) ? $decoded : [];
     }
 }
