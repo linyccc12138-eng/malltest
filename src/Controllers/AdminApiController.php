@@ -272,6 +272,9 @@ class AdminApiController extends BaseController
 
             $values = $request->all();
             unset($values['_csrf_token']);
+            if ($group === 'wechat_pay') {
+                $values = $this->mergeWechatPaySensitiveValues($values);
+            }
             $this->settings->saveGroup($group, $values, $encryptedMap[$group] ?? []);
 
             return ['message' => '配置已保存。'];
@@ -290,7 +293,7 @@ class AdminApiController extends BaseController
     {
         return $this->adminRespond(function () use ($request): array {
             $this->validateCsrf($request);
-            return $this->wechat->testPayConfig($request->all());
+            return $this->wechat->testPayConfig($this->mergeWechatPaySensitiveValues($request->all()));
         });
     }
 
@@ -359,6 +362,64 @@ class AdminApiController extends BaseController
                 ],
             ];
         });
+    }
+
+    private function mergeWechatPaySensitiveValues(array $values): array
+    {
+        $current = $this->settings->getGroup('wechat_pay');
+        $sensitiveFields = ['merchant_serial_no', 'public_key_id', 'api_v3_key', 'private_key_content', 'public_key_content'];
+
+        foreach ($sensitiveFields as $field) {
+            $incoming = $values[$field] ?? null;
+            if ($incoming === null || trim((string) $incoming) === '') {
+                if (!empty($current[$field])) {
+                    $values[$field] = (string) $current[$field];
+                }
+                continue;
+            }
+
+            $values[$field] = (string) $incoming;
+        }
+
+        if (!empty($values['public_key_content'])) {
+            $values['public_key_content'] = $this->normalizeWechatPublicKey((string) $values['public_key_content']);
+        }
+
+        return $values;
+    }
+
+    private function normalizeWechatPublicKey(string $value): string
+    {
+        $trimmed = trim($value);
+        if ($trimmed === '') {
+            return '';
+        }
+
+        if (str_contains($trimmed, 'BEGIN PUBLIC KEY')) {
+            return $trimmed;
+        }
+
+        if (!str_contains($trimmed, 'BEGIN CERTIFICATE')) {
+            return $trimmed;
+        }
+
+        $certificate = openssl_x509_read($trimmed);
+        if ($certificate === false) {
+            throw new \RuntimeException('微信支付公钥证书内容无效。');
+        }
+
+        $publicKey = openssl_pkey_get_public($certificate);
+        if ($publicKey === false) {
+            throw new \RuntimeException('无法从证书中提取微信支付公钥。');
+        }
+
+        $details = openssl_pkey_get_details($publicKey);
+        $key = (string) ($details['key'] ?? '');
+        if ($key === '') {
+            throw new \RuntimeException('微信支付公钥格式无效。');
+        }
+
+        return trim($key);
     }
 
     public function upload(Request $request, array $params = []): Response

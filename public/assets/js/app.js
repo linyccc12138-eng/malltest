@@ -2809,6 +2809,7 @@
             memberPager: defaultPager(15),
             activities: [],
             settings: normalizeSettings(pageData.settings || {}),
+            settingsMeta: pageData.settings?.__meta || {},
             logs: [],
             logFilters: { level: '', channel: '' },
             logPager: defaultPager(15),
@@ -2856,6 +2857,9 @@
                 this.activeTab = tab;
                 window.history.replaceState({}, '', `/mall/admin?tab=${tab}`);
                 void this.ensureTabLoaded(tab);
+            },
+            wechatPayFieldPlaceholder(field, fallback = '') {
+                return this.settingsMeta?.wechat_pay?.[field] ? '已配置，留空则保持不变' : fallback;
             },
             async ensureTabLoaded(tab) {
                 if (this.loadedTabs[tab]) {

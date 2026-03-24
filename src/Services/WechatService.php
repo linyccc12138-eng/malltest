@@ -251,7 +251,19 @@ class WechatService
     {
         $this->assertPayFields($config, ['app_id', 'merchant_id', 'merchant_serial_no', 'api_v3_key', 'private_key_content']);
         $this->assertPayVerificationConfig($config);
-        $response = $this->wechatPayRequest('GET', 'https://api.mch.weixin.qq.com/v3/certificates', null, $config);
+        try {
+            $response = $this->wechatPayRequest('GET', 'https://api.mch.weixin.qq.com/v3/certificates', null, $config);
+        } catch (\RuntimeException $exception) {
+            if (str_contains($exception->getMessage(), '无可用的平台证书')) {
+                return [
+                    'success' => true,
+                    'message' => '微信支付公钥配置测试成功。当前商户号已启用微信支付公钥模式，平台证书下载接口返回预期提示。',
+                    'verification_mode' => 'public_key',
+                ];
+            }
+
+            throw $exception;
+        }
 
         return [
             'success' => true,

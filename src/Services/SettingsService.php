@@ -100,12 +100,18 @@ class SettingsService
 
     public function allForAdmin(): array
     {
+        $wechatPay = array_merge($this->defaults()['wechat_pay'], $this->getGroup('wechat_pay'));
+        $wechatPaySensitive = ['merchant_serial_no', 'public_key_id', 'api_v3_key', 'private_key_content', 'public_key_content'];
+
         return [
             'membership_mysql' => array_merge($this->defaults()['membership_mysql'], $this->getGroup('membership_mysql')),
-            'wechat_pay' => array_merge($this->defaults()['wechat_pay'], $this->getGroup('wechat_pay')),
+            'wechat_pay' => $this->maskAdminSensitiveFields($wechatPay, $wechatPaySensitive),
             'wechat_service_account' => array_merge($this->defaults()['wechat_service_account'], $this->getGroup('wechat_service_account')),
             'log' => array_merge($this->defaults()['log'], $this->getGroup('log')),
             'notifications' => array_merge($this->defaults()['notifications'], $this->getGroup('notifications')),
+            '__meta' => [
+                'wechat_pay' => $this->adminConfiguredState($wechatPay, $wechatPaySensitive),
+            ],
         ];
     }
 
@@ -208,5 +214,26 @@ class SettingsService
         }
 
         return $values;
+    }
+
+    private function maskAdminSensitiveFields(array $values, array $fields): array
+    {
+        foreach ($fields as $field) {
+            if (array_key_exists($field, $values)) {
+                $values[$field] = '';
+            }
+        }
+
+        return $values;
+    }
+
+    private function adminConfiguredState(array $values, array $fields): array
+    {
+        $state = [];
+        foreach ($fields as $field) {
+            $state[$field] = !empty($values[$field]);
+        }
+
+        return $state;
     }
 }
