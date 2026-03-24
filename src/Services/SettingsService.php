@@ -170,7 +170,6 @@ class SettingsService
                 'api_v3_key' => '',
                 'private_key_content' => '',
                 'public_key_content' => '',
-                'platform_cert_content' => '',
                 'notify_url' => '',
                 'pay_mode' => 'JSAPI',
             ],

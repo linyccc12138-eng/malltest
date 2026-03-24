@@ -1112,7 +1112,7 @@
     const normalizeSettings = (settings = {}) => ({
         membership_mysql: { host: '', port: '3306', database: '', username: '', password: '', charset: 'utf8mb4', ...(settings.membership_mysql || {}) },
         log: { min_level: 'info', retention_days: '30', max_size_mb: '10', ...(settings.log || {}) },
-        wechat_pay: { app_id: '', merchant_id: '', merchant_serial_no: '', public_key_id: '', pay_mode: 'JSAPI', notify_url: '', api_v3_key: '', private_key_content: '', public_key_content: '', platform_cert_content: '', ...(settings.wechat_pay || {}) },
+        wechat_pay: { app_id: '', merchant_id: '', merchant_serial_no: '', public_key_id: '', pay_mode: 'JSAPI', notify_url: '', api_v3_key: '', private_key_content: '', public_key_content: '', ...(settings.wechat_pay || {}) },
         wechat_service_account: { app_id: '', app_secret: '', ...(settings.wechat_service_account || {}) },
         notifications: normalizeNotificationSettings(settings.notifications || {}),
     });

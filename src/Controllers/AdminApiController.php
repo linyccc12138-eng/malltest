@@ -264,7 +264,7 @@ class AdminApiController extends BaseController
 
             $encryptedMap = [
                 'membership_mysql' => ['password'],
-                'wechat_pay' => ['api_v3_key', 'private_key_content', 'public_key_content', 'platform_cert_content'],
+                'wechat_pay' => ['api_v3_key', 'private_key_content', 'public_key_content'],
                 'wechat_service_account' => ['app_secret'],
                 'log' => [],
                 'notifications' => [],

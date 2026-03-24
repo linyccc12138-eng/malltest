@@ -505,7 +505,7 @@ class WechatService
         $publicKeyId = trim((string) ($config['public_key_id'] ?? ''));
         $publicKeyContent = trim((string) ($config['public_key_content'] ?? ''));
         if ($publicKeyId !== '' && $publicKeyContent !== '' && hash_equals($publicKeyId, trim($serial))) {
-            $publicKey = $this->publicKeyFromMaterial($publicKeyContent);
+            $publicKey = $this->publicKeyFromContent($publicKeyContent);
             if ($publicKey === false) {
                 throw new \RuntimeException('微信支付公钥内容无效。');
             }
@@ -513,65 +513,16 @@ class WechatService
             return $publicKey;
         }
 
-        $platformCertContent = trim((string) ($config['platform_cert_content'] ?? ''));
-        if ($platformCertContent !== '') {
-            $platformSerial = $this->certificateSerial($platformCertContent);
-            if ($platformSerial !== null && $this->serialEquals($platformSerial, $serial)) {
-                $publicKey = $this->publicKeyFromMaterial($platformCertContent);
-                if ($publicKey === false) {
-                    throw new \RuntimeException('微信支付平台证书内容无效。');
-                }
-
-                return $publicKey;
-            }
-        }
-
-        throw new \RuntimeException('未找到与 Wechatpay-Serial 匹配的验签材料。');
+        throw new \RuntimeException('未找到与 Wechatpay-Serial 匹配的微信支付公钥。');
     }
 
-    private function publicKeyFromMaterial(string $certificateContent): mixed
+    private function publicKeyFromContent(string $publicKeyContent): mixed
     {
-        $publicKey = openssl_pkey_get_public($certificateContent);
-        if ($publicKey !== false) {
-            return $publicKey;
-        }
-
-        $cert = openssl_x509_read($certificateContent);
-        if ($cert === false) {
+        if (!preg_match('/-----BEGIN PUBLIC KEY-----/', $publicKeyContent)) {
             return false;
         }
 
-        return openssl_pkey_get_public($cert);
-    }
-
-    private function certificateSerial(string $certificateContent): ?string
-    {
-        $parsed = openssl_x509_parse($certificateContent);
-        if (!is_array($parsed)) {
-            return null;
-        }
-
-        $serialHex = strtoupper((string) ($parsed['serialNumberHex'] ?? ''));
-        if ($serialHex === '') {
-            $serialHex = strtoupper((string) ($parsed['serialNumber'] ?? ''));
-        }
-
-        $normalized = ltrim(str_replace(':', '', $serialHex), '0');
-        return $normalized === '' ? '0' : $normalized;
-    }
-
-    private function serialEquals(string $expectedSerial, string $headerSerial): bool
-    {
-        $expected = ltrim(strtoupper(str_replace(':', '', $expectedSerial)), '0');
-        $header = ltrim(strtoupper(str_replace(':', '', $headerSerial)), '0');
-        if ($expected === '') {
-            $expected = '0';
-        }
-        if ($header === '') {
-            $header = '0';
-        }
-
-        return hash_equals($expected, $header);
+        return openssl_pkey_get_public($publicKeyContent);
     }
 
     private function normalizeTimeExpire(string $expiresAt): ?string
@@ -611,10 +562,8 @@ class WechatService
 
     private function assertPayVerificationConfig(array $config): void
     {
-        $hasPublicKey = !empty($config['public_key_id']) && !empty($config['public_key_content']);
-        $hasPlatformCert = !empty($config['platform_cert_content']);
-        if (!$hasPublicKey && !$hasPlatformCert) {
-            throw new \RuntimeException('缺少微信支付验签材料：请配置微信支付公钥，灰度期可临时保留旧平台证书。');
+        if (empty($config['public_key_id']) || empty($config['public_key_content'])) {
+            throw new \RuntimeException('缺少微信支付验签材料：请配置微信支付公钥ID和微信支付公钥。');
         }
     }
 
@@ -678,16 +627,7 @@ class WechatService
     private function responseVerificationSerial(array $config): ?string
     {
         $publicKeyId = trim((string) ($config['public_key_id'] ?? ''));
-        if ($publicKeyId !== '' && !empty($config['public_key_content'])) {
-            return $publicKeyId;
-        }
-
-        $platformCertContent = trim((string) ($config['platform_cert_content'] ?? ''));
-        if ($platformCertContent === '') {
-            return null;
-        }
-
-        return $this->certificateSerial($platformCertContent);
+        return $publicKeyId !== '' && !empty($config['public_key_content']) ? $publicKeyId : null;
     }
 
     private function httpJson(string $method, string $url, ?array $payload = null, array $headers = [], ?array $wechatPayConfig = null): array
