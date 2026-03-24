@@ -689,7 +689,12 @@ class WechatService
                 $decoded = [];
             }
             if ($statusCode < 400 && str_starts_with($url, 'https://api.mch.weixin.qq.com/') && $wechatPayConfig !== null) {
-                $this->verifyResponseSignature($responseHeaders, (string) $result, $wechatPayConfig);
+                try {
+                    $this->verifyResponseSignature($responseHeaders, (string) $result, $wechatPayConfig);
+                } catch (\Throwable $throwable) {
+                    $this->logWechatResponseSignatureFailure($url, $method, $statusCode, $responseHeaders, (string) $result, $wechatPayConfig, $throwable);
+                    throw $throwable;
+                }
             }
             if ($statusCode >= 400) {
                 throw new \RuntimeException('微信接口返回错误：' . ($decoded['message'] ?? $decoded['errmsg'] ?? $statusCode));
@@ -731,9 +736,75 @@ class WechatService
         }
         $decoded = json_decode((string) $result, true);
         if ($statusCode < 400 && str_starts_with($url, 'https://api.mch.weixin.qq.com/') && $wechatPayConfig !== null) {
-            $this->verifyResponseSignature($responseHeaders, (string) $result, $wechatPayConfig);
+            try {
+                $this->verifyResponseSignature($responseHeaders, (string) $result, $wechatPayConfig);
+            } catch (\Throwable $throwable) {
+                $this->logWechatResponseSignatureFailure($url, $method, $statusCode, $responseHeaders, (string) $result, $wechatPayConfig, $throwable);
+                throw $throwable;
+            }
         }
 
         return is_array($decoded) ? $decoded : [];
+    }
+
+    private function logWechatResponseSignatureFailure(
+        string $url,
+        string $method,
+        int $statusCode,
+        array $responseHeaders,
+        string $body,
+        array $config,
+        \Throwable $throwable
+    ): void {
+        $serial = $this->headerValue($responseHeaders, ['Wechatpay-Serial', 'wechatpay-serial', 'HTTP_WECHATPAY_SERIAL']);
+        $timestamp = $this->headerValue($responseHeaders, ['Wechatpay-Timestamp', 'wechatpay-timestamp', 'HTTP_WECHATPAY_TIMESTAMP']);
+        $nonce = $this->headerValue($responseHeaders, ['Wechatpay-Nonce', 'wechatpay-nonce', 'HTTP_WECHATPAY_NONCE']);
+        $signature = $this->headerValue($responseHeaders, ['Wechatpay-Signature', 'wechatpay-signature', 'HTTP_WECHATPAY_SIGNATURE']);
+        $configuredPublicKey = trim((string) ($config['public_key_content'] ?? ''));
+        $merchantPublicKey = $this->merchantPublicKeyFromPrivateKey($config);
+        $configuredPublicKeyId = trim((string) ($config['public_key_id'] ?? ''));
+
+        $this->logger->warning('wechat', '微信支付应答验签失败', [
+            'method' => strtoupper($method),
+            'url' => $url,
+            'status_code' => $statusCode,
+            'error' => $throwable->getMessage(),
+            'wechatpay_serial' => $serial,
+            'wechatpay_timestamp' => $timestamp,
+            'wechatpay_nonce_present' => $nonce !== '',
+            'wechatpay_signature_length' => strlen($signature),
+            'configured_public_key_id' => $configuredPublicKeyId,
+            'serial_matches_configured_public_key_id' => $serial !== '' && $configuredPublicKeyId !== '' ? hash_equals($configuredPublicKeyId, $serial) : null,
+            'configured_public_key_sha256' => $this->pemFingerprint($configuredPublicKey),
+            'merchant_public_key_sha256' => $this->pemFingerprint($merchantPublicKey),
+            'configured_verification_key_matches_merchant_public' => $configuredPublicKey !== '' && $merchantPublicKey !== ''
+                ? hash_equals($configuredPublicKey, $merchantPublicKey)
+                : null,
+            'response_body_sha256' => hash('sha256', $body),
+            'response_body_length' => strlen($body),
+        ]);
+    }
+
+    private function merchantPublicKeyFromPrivateKey(array $config): ?string
+    {
+        $privateKeyContent = trim((string) ($config['private_key_content'] ?? ''));
+        if ($privateKeyContent === '') {
+            return null;
+        }
+
+        $privateKey = openssl_pkey_get_private($privateKeyContent);
+        if ($privateKey === false) {
+            return null;
+        }
+
+        $details = openssl_pkey_get_details($privateKey);
+        $publicKey = trim((string) ($details['key'] ?? ''));
+        return $publicKey !== '' ? $publicKey : null;
+    }
+
+    private function pemFingerprint(?string $pem): ?string
+    {
+        $normalized = trim((string) $pem);
+        return $normalized !== '' ? hash('sha256', $normalized) : null;
     }
 }

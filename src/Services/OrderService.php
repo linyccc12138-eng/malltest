@@ -385,7 +385,18 @@ class OrderService
 
         $paymentNo = $this->generatePaymentNo();
         $order['client_ip'] = $clientIp;
-        $payPayload = $this->wechat->createPayOrder($order, $user);
+        try {
+            $payPayload = $this->wechat->createPayOrder($order, $user);
+        } catch (\Throwable $throwable) {
+            $this->logger->warning('wechat', '发起微信支付失败', [
+                'order_id' => $orderId,
+                'order_no' => (string) ($order['order_no'] ?? ''),
+                'user_id' => $userId,
+                'client_ip' => $clientIp,
+                'message' => $throwable->getMessage(),
+            ]);
+            throw $throwable;
+        }
 
         $pdo = $this->db->mall();
         $stmt = $pdo->prepare(
