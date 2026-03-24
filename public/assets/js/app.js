@@ -1117,6 +1117,113 @@
         notifications: normalizeNotificationSettings(settings.notifications || {}),
     });
 
+    const cloneSettingsSnapshot = (settings = {}) => normalizeSettings(JSON.parse(JSON.stringify(settings || {})));
+
+    const settingsGroupLabels = {
+        membership_mysql: '会员系统配置',
+        log: '日志配置',
+        wechat_pay: '微信支付配置',
+        wechat_service_account: '公众号配置',
+        notifications: '通知配置',
+    };
+
+    const settingsFieldConfigs = {
+        membership_mysql: {
+            host: { label: '数据库地址' },
+            port: { label: '端口' },
+            database: { label: '数据库名' },
+            username: { label: '用户名' },
+            password: { label: '密码', sensitive: true },
+            charset: { label: '字符集' },
+        },
+        log: {
+            min_level: { label: '最低记录级别' },
+            retention_days: { label: '保留天数' },
+            max_size_mb: { label: '单文件大小（MB）' },
+        },
+        wechat_pay: {
+            app_id: { label: 'AppID' },
+            merchant_id: { label: '商户号' },
+            merchant_serial_no: { label: '商户证书序列号', sensitive: true, useMetaState: true },
+            public_key_id: { label: '微信支付公钥ID', sensitive: true, useMetaState: true },
+            pay_mode: { label: '支付模式' },
+            notify_url: { label: '通知地址' },
+            api_v3_key: { label: 'APIv3 Key', sensitive: true, useMetaState: true },
+            private_key_content: { label: '商户私钥', sensitive: true, useMetaState: true },
+            public_key_content: { label: '微信支付公钥', sensitive: true, useMetaState: true },
+        },
+        wechat_service_account: {
+            app_id: { label: 'AppID' },
+            app_secret: { label: 'AppSecret', sensitive: true },
+        },
+        notifications: {
+            admin_paid_template_id: { label: '管理员付款模板 ID' },
+            admin_cancelled_template_id: { label: '管理员取消模板 ID' },
+            user_paid_template_id: { label: '用户付款模板 ID' },
+            user_shipped_template_id: { label: '用户发货模板 ID' },
+            user_cancelled_template_id: { label: '用户取消模板 ID' },
+            admin_paid_enabled: { label: '管理员付款通知', type: 'toggle' },
+            admin_cancelled_enabled: { label: '管理员取消通知', type: 'toggle' },
+            user_paid_enabled: { label: '用户付款通知', type: 'toggle' },
+            user_shipped_enabled: { label: '用户发货通知', type: 'toggle' },
+            user_cancelled_enabled: { label: '用户取消通知', type: 'toggle' },
+        },
+    };
+
+    const buildSettingsChangeLines = (groupKey, currentSettings = {}, originalSettings = {}, meta = {}) => {
+        const fieldConfigs = settingsFieldConfigs[groupKey] || {};
+        return Object.entries(fieldConfigs).reduce((lines, [fieldKey, config]) => {
+            const currentValue = currentSettings?.[fieldKey];
+            const originalValue = originalSettings?.[fieldKey];
+
+            if (config.type === 'toggle') {
+                const currentToggle = normalizeToggleValue(currentValue, '0');
+                const originalToggle = normalizeToggleValue(originalValue, '0');
+                if (currentToggle !== originalToggle) {
+                    lines.push(`${config.label}：${currentToggle === '1' ? '开启' : '关闭'}（原为${originalToggle === '1' ? '开启' : '关闭'}）`);
+                }
+                return lines;
+            }
+
+            const currentText = String(currentValue ?? '').trim();
+            const originalText = String(originalValue ?? '').trim();
+
+            if (config.sensitive) {
+                const originalConfigured = originalText !== '' || (config.useMetaState && Boolean(meta?.[fieldKey]));
+                if (currentText !== '' && originalText !== '' && currentText === originalText) {
+                    return lines;
+                }
+                if (currentText === '' && originalText === '') {
+                    return lines;
+                }
+                if (currentText === '' && config.useMetaState && originalConfigured && originalText === '') {
+                    return lines;
+                }
+
+                const currentState = currentText !== '' ? (originalConfigured ? '已更新' : '已填写') : '已清空';
+                const originalState = originalConfigured ? '已配置' : '未填写';
+                if (currentState !== originalState) {
+                    lines.push(`${config.label}：${currentState}（原为${originalState}）`);
+                }
+                return lines;
+            }
+
+            if (currentText !== originalText) {
+                lines.push(`${config.label}：${currentText || '空'}（原为${originalText || '空'}）`);
+            }
+            return lines;
+        }, []);
+    };
+
+    const buildSettingsConfirmMessage = (groupKey, currentSettings = {}, originalSettings = {}, meta = {}) => {
+        const lines = buildSettingsChangeLines(groupKey, currentSettings, originalSettings, meta);
+        if (!lines.length) {
+            return '';
+        }
+
+        return `即将保存${settingsGroupLabels[groupKey] || '系统配置'}，本次修改如下：\n- ${lines.join('\n- ')}\n\n确认继续保存吗？`;
+    };
+
     const defaultCategoryForm = () => ({ id: null, name: '', parent_id: '0', level: 1 });
     const defaultUserForm = () => ({ id: null, nickname: '', phone: '', password: '', membership_member_id: '', allow_duplicate_membership: false, status: 'active' });
     const defaultMemberForm = () => ({ id: null, fnumber: '', fname: '', fclassesid: '', fclassesname: '', initial_amount: 0, fbalance: 0, fmark: '', adjust_amount: '', adjust_mark: '' });
@@ -2490,6 +2597,7 @@
             productForm: normalizeProductForm(pageData.product || {}),
             detailMode: 'preview',
             detailViewportMode: 'ratio',
+            savingProduct: false,
             uploading: { cover: false, gallery: false },
             init() {
                 const syncCategorySelection = (value) => {
@@ -2621,7 +2729,11 @@
                 this.productForm.gallery_images.splice(index, 1);
             },
             async saveProduct() {
+                if (this.savingProduct) {
+                    return;
+                }
                 try {
+                    this.savingProduct = true;
                     const editor = window.tinymce?.get('product-detail-editor-page');
                     if (editor) {
                         this.productForm.detail_html = editor.getContent();
@@ -2659,6 +2771,8 @@
                     this.detailMode = 'preview';
                 } catch (error) {
                     notice(error.message, 'error');
+                } finally {
+                    this.savingProduct = false;
                 }
             },
             formatMoney,
@@ -2809,6 +2923,7 @@
             memberPager: defaultPager(15),
             activities: [],
             settings: normalizeSettings(pageData.settings || {}),
+            settingsSnapshot: cloneSettingsSnapshot(pageData.settings || {}),
             settingsMeta: pageData.settings?.__meta || {},
             logs: [],
             logFilters: { level: '', channel: '' },
@@ -2860,6 +2975,43 @@
             },
             wechatPayFieldPlaceholder(field, fallback = '') {
                 return this.settingsMeta?.wechat_pay?.[field] ? '已配置，留空则保持不变' : fallback;
+            },
+            confirmSettingsSave(groupKey, payload) {
+                const message = buildSettingsConfirmMessage(
+                    groupKey,
+                    payload,
+                    this.settingsSnapshot?.[groupKey] || {},
+                    this.settingsMeta?.[groupKey] || {}
+                );
+
+                if (!message) {
+                    notice('未检测到配置修改内容。', 'error');
+                    return false;
+                }
+
+                return window.confirm(message);
+            },
+            markSettingsSaved(groupKey, payload) {
+                this.settingsSnapshot = {
+                    ...this.settingsSnapshot,
+                    [groupKey]: cloneSettingsSnapshot({ [groupKey]: payload })[groupKey],
+                };
+
+                if (groupKey === 'wechat_pay') {
+                    const configuredFields = ['merchant_serial_no', 'public_key_id', 'api_v3_key', 'private_key_content', 'public_key_content'];
+                    this.settingsMeta = {
+                        ...this.settingsMeta,
+                        wechat_pay: {
+                            ...(this.settingsMeta?.wechat_pay || {}),
+                            ...configuredFields.reduce((bucket, field) => {
+                                if (String(payload?.[field] ?? '').trim() !== '') {
+                                    bucket[field] = true;
+                                }
+                                return bucket;
+                            }, {}),
+                        },
+                    };
+                }
             },
             async ensureTabLoaded(tab) {
                 if (this.loadedTabs[tab]) {
@@ -3448,41 +3600,66 @@
                 window.location.href = id ? `/mall/admin/activities/edit?id=${id}` : '/mall/admin/activities/edit';
             },
             async saveMembershipSettings() {
+                const payload = { ...this.settings.membership_mysql };
+                if (!this.confirmSettingsSave('membership_mysql', payload)) {
+                    return;
+                }
                 try {
-                    await apiRequest('/mall/api/admin/settings/membership_mysql', { method: 'POST', body: this.settings.membership_mysql });
+                    await apiRequest('/mall/api/admin/settings/membership_mysql', { method: 'POST', body: payload });
+                    this.markSettingsSaved('membership_mysql', payload);
                     notice('会员系统配置已保存。');
                 } catch (error) {
                     notice(error.message, 'error');
                 }
             },
             async saveLogSettings() {
+                const payload = { ...this.settings.log };
+                if (!this.confirmSettingsSave('log', payload)) {
+                    return;
+                }
                 try {
-                    await apiRequest('/mall/api/admin/settings/log', { method: 'POST', body: this.settings.log });
+                    await apiRequest('/mall/api/admin/settings/log', { method: 'POST', body: payload });
+                    this.markSettingsSaved('log', payload);
                     notice('日志配置已保存。');
                 } catch (error) {
                     notice(error.message, 'error');
                 }
             },
             async saveWechatPaySettings() {
+                const payload = { ...this.settings.wechat_pay };
+                if (!this.confirmSettingsSave('wechat_pay', payload)) {
+                    return;
+                }
                 try {
-                    await apiRequest('/mall/api/admin/settings/wechat_pay', { method: 'POST', body: this.settings.wechat_pay });
+                    await apiRequest('/mall/api/admin/settings/wechat_pay', { method: 'POST', body: payload });
+                    this.markSettingsSaved('wechat_pay', payload);
                     notice('微信支付配置已保存。');
                 } catch (error) {
                     notice(error.message, 'error');
                 }
             },
             async saveServiceAccountSettings() {
+                const payload = { ...this.settings.wechat_service_account };
+                if (!this.confirmSettingsSave('wechat_service_account', payload)) {
+                    return;
+                }
                 try {
-                    await apiRequest('/mall/api/admin/settings/wechat_service_account', { method: 'POST', body: this.settings.wechat_service_account });
+                    await apiRequest('/mall/api/admin/settings/wechat_service_account', { method: 'POST', body: payload });
+                    this.markSettingsSaved('wechat_service_account', payload);
                     notice('公众号配置已保存。');
                 } catch (error) {
                     notice(error.message, 'error');
                 }
             },
             async saveNotificationSettings() {
+                const payload = normalizeNotificationSettings(this.settings.notifications);
+                this.settings.notifications = payload;
+                if (!this.confirmSettingsSave('notifications', payload)) {
+                    return;
+                }
                 try {
-                    this.settings.notifications = normalizeNotificationSettings(this.settings.notifications);
-                    await apiRequest('/mall/api/admin/settings/notifications', { method: 'POST', body: this.settings.notifications });
+                    await apiRequest('/mall/api/admin/settings/notifications', { method: 'POST', body: payload });
+                    this.markSettingsSaved('notifications', payload);
                     notice('通知配置已保存。');
                 } catch (error) {
                     notice(error.message, 'error');

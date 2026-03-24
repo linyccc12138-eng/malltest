@@ -75,6 +75,12 @@ $editorData = [
                         设为推荐课程
                     </label>
                 </div>
+
+                <div class="mt-5 flex justify-end">
+                    <button type="submit" :disabled="savingProduct" class="rounded-full bg-bronze px-5 py-3 text-sm text-white shadow-card transition hover:bg-bronze/90 disabled:cursor-not-allowed disabled:opacity-60">
+                        <span x-text="savingProduct ? '保存中...' : '保存商品'"></span>
+                    </button>
+                </div>
             </div>
 
             <div class="space-y-6">
@@ -139,7 +145,12 @@ $editorData = [
                     <h2 class="font-display text-2xl text-ink">规格设置</h2>
                     <p class="mt-2 text-sm leading-7 text-ink/60">可为商品配置多个规格，前台下单时会按所选规格价格和库存计算；商品列表默认展示第一个规格的价格和库存。</p>
                 </div>
-                <button @click="addSkuRow()" type="button" class="rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">新增规格</button>
+                <div class="flex flex-wrap gap-2">
+                    <button @click="addSkuRow()" type="button" class="rounded-full border border-bronze/15 px-4 py-2 text-sm text-bronze">新增规格</button>
+                    <button type="submit" :disabled="savingProduct" class="rounded-full bg-bronze px-4 py-2 text-sm text-white shadow-card transition hover:bg-bronze/90 disabled:cursor-not-allowed disabled:opacity-60">
+                        <span x-text="savingProduct ? '保存中...' : '保存商品'"></span>
+                    </button>
+                </div>
             </div>
 
             <div class="mt-5 space-y-4">
@@ -213,8 +224,8 @@ $editorData = [
             <a href="/mall/admin?tab=products" class="rounded-full border border-bronze/20 px-5 py-3 text-sm text-bronze transition hover:border-bronze hover:bg-bronze/5">
                 取消
             </a>
-            <button type="submit" class="rounded-full bg-bronze px-5 py-3 text-sm text-white shadow-card transition hover:bg-bronze/90">
-                保存商品
+            <button type="submit" :disabled="savingProduct" class="rounded-full bg-bronze px-5 py-3 text-sm text-white shadow-card transition hover:bg-bronze/90 disabled:cursor-not-allowed disabled:opacity-60">
+                <span x-text="savingProduct ? '保存中...' : '保存商品'"></span>
             </button>
         </div>
     </form>
