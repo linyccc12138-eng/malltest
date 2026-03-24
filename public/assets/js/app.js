@@ -1078,6 +1078,7 @@
         id: item.id ?? null,
         title: item.title || '',
         summary: item.summary || '',
+        link_url: item.link_url || '',
         thumbnail_image: item.thumbnail_image || '',
         content_html: item.content_html || '',
         display_order: item.display_order ?? 0,

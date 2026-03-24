@@ -387,7 +387,7 @@ class CatalogService
 
     public function listActivities(bool $onlyActive = false): array
     {
-        $sql = 'SELECT id, title, summary, thumbnail_image, content_html, display_order, is_active, starts_at, ends_at
+        $sql = 'SELECT id, title, summary, link_url, thumbnail_image, content_html, display_order, is_active, starts_at, ends_at
                 FROM activities';
         if ($onlyActive) {
             $sql .= " WHERE is_active = 1";
@@ -403,6 +403,7 @@ class CatalogService
         $payload = [
             ':title' => trim((string) $data['title']),
             ':summary' => trim((string) ($data['summary'] ?? '')),
+            ':link_url' => trim((string) ($data['link_url'] ?? '')),
             ':thumbnail_image' => trim((string) ($data['thumbnail_image'] ?? '')),
             ':content_html' => $this->sanitizer->clean((string) ($data['content_html'] ?? '')),
             ':display_order' => (int) ($data['display_order'] ?? 0),
@@ -413,20 +414,20 @@ class CatalogService
         ];
 
         if ($activityId) {
-            $sql = 'UPDATE activities SET title = :title, summary = :summary, thumbnail_image = :thumbnail_image,
+            $sql = 'UPDATE activities SET title = :title, summary = :summary, link_url = :link_url, thumbnail_image = :thumbnail_image,
                     content_html = :content_html, display_order = :display_order, is_active = :is_active,
                     starts_at = :starts_at, ends_at = :ends_at, updated_at = :updated_at WHERE id = :id';
             $payload[':id'] = $activityId;
         } else {
-            $sql = 'INSERT INTO activities (title, summary, thumbnail_image, content_html, display_order, is_active, starts_at, ends_at, created_at, updated_at)
-                    VALUES (:title, :summary, :thumbnail_image, :content_html, :display_order, :is_active, :starts_at, :ends_at, :created_at, :updated_at)';
+            $sql = 'INSERT INTO activities (title, summary, link_url, thumbnail_image, content_html, display_order, is_active, starts_at, ends_at, created_at, updated_at)
+                    VALUES (:title, :summary, :link_url, :thumbnail_image, :content_html, :display_order, :is_active, :starts_at, :ends_at, :created_at, :updated_at)';
             $payload[':created_at'] = now();
         }
 
         $stmt = $pdo->prepare($sql);
         $stmt->execute($payload);
         $id = $activityId ?: (int) $pdo->lastInsertId();
-        $query = $pdo->prepare('SELECT id, title, summary, thumbnail_image, content_html, display_order, is_active, starts_at, ends_at FROM activities WHERE id = :id');
+        $query = $pdo->prepare('SELECT id, title, summary, link_url, thumbnail_image, content_html, display_order, is_active, starts_at, ends_at FROM activities WHERE id = :id');
         $query->execute([':id' => $id]);
         return $query->fetch() ?: [];
     }
@@ -434,7 +435,7 @@ class CatalogService
     public function findActivityById(int $activityId): ?array
     {
         $stmt = $this->db->mall()->prepare(
-            'SELECT id, title, summary, thumbnail_image, content_html, display_order, is_active, starts_at, ends_at
+            'SELECT id, title, summary, link_url, thumbnail_image, content_html, display_order, is_active, starts_at, ends_at
              FROM activities
              WHERE id = :id
              LIMIT 1'

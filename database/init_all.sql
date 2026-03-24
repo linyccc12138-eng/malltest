@@ -264,6 +264,7 @@ CREATE TABLE IF NOT EXISTS activities (
   id INT AUTO_INCREMENT PRIMARY KEY,
   title VARCHAR(180) NOT NULL,
   summary VARCHAR(255) DEFAULT '',
+  link_url VARCHAR(500) DEFAULT '',
   thumbnail_image VARCHAR(255) DEFAULT '',
   content_html MEDIUMTEXT,
   display_order INT NOT NULL DEFAULT 0,
@@ -299,7 +300,7 @@ CREATE TABLE IF NOT EXISTS system_logs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='分级系统日志表';
 
 INSERT INTO mall_users (id, username, password_hash, nickname, phone, role, openid, membership_member_id, status, last_login_at, created_at, updated_at) VALUES
-(1, 'admin', '$2y$12$yyLvJFaDQw1LUM/A6D/pCOqAgSExTaN7kOrugOicpcaOFQ8KrBBUq', '系统管理员', '13800000000', 'admin', NULL, 1, 'active', NULL, NOW(), NOW()),
+(1, 'lyccc', '$2y$10$iZp19nAOm0msC7W76dh00u/WqGW2dSGFuQ/WqghyUzEv.umgLtByS', 'lyccc', '13206335421', 'admin', NULL, 1, 'active', NULL, NOW(), NOW()),
 (2, 'demo_user', '$2y$12$HI463k7fif.ZsDYr6S1XEOoW8yyh/G5Fkblaf57vyXLMjWUWQjk8K', '演示用户', '13900000000', 'customer', NULL, 1, 'active', NULL, NOW(), NOW())
 ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), phone = VALUES(phone), role = VALUES(role), membership_member_id = VALUES(membership_member_id), status = VALUES(status), updated_at = NOW();
 
@@ -326,8 +327,8 @@ INSERT INTO product_skus (product_id, sku_code, attribute_json, price, stock, co
 (3, 'SKU-COURSE-01', JSON_OBJECT('版本', '标准版'), 399.00, 999, '/assets/images/products/course-composition.webp', NOW(), NOW()),
 (4, 'SKU-LOTION-01', JSON_OBJECT('香型', '琥珀花窗', '规格', '250ml'), 158.00, 18, '/assets/images/products/lotion-amber.webp', NOW(), NOW());
 
-INSERT INTO activities (title, summary, thumbnail_image, content_html, display_order, is_active, starts_at, ends_at, created_at, updated_at)
-SELECT '春季花影会员礼遇', '会员绑定后购买指定商品可享折扣与活动推荐。', '/assets/images/navigation/activity-spring.webp', '<p>管理员可在后台继续编辑活动富文本内容与展示顺序。</p>', 1, 1, NOW(), NULL, NOW(), NOW()
+INSERT INTO activities (title, summary, link_url, thumbnail_image, content_html, display_order, is_active, starts_at, ends_at, created_at, updated_at)
+SELECT '春季花影会员礼遇', '会员绑定后购买指定商品可享折扣与活动推荐。', '', '/assets/images/navigation/activity-spring.webp', '<p>管理员可在后台继续编辑活动富文本内容与展示顺序。</p>', 1, 1, NOW(), NULL, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM activities WHERE title = '春季花影会员礼遇');
 
 INSERT INTO system_settings (setting_group, setting_key, setting_value, is_encrypted, updated_at) VALUES

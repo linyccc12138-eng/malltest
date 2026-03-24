@@ -34,6 +34,11 @@ $editorData = [
                         摘要
                         <textarea x-model="activityForm.summary" rows="4" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55"></textarea>
                     </label>
+                    <label class="block text-sm text-ink/70 md:col-span-2">
+                        跳转链接 URL
+                        <input x-model="activityForm.link_url" type="text" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55" placeholder="例如：https://example.com/activity 或 /mall/products/5">
+                        <span class="mt-2 block text-xs text-ink/45">配置后，用户点击活动时会优先跳转到该链接，不再进入活动详情页。</span>
+                    </label>
                     <label class="block text-sm text-ink/70">
                         展示顺序
                         <input x-model="activityForm.display_order" type="number" min="0" class="mt-2 w-full rounded-2xl border-bronze/15 bg-parchment/55">

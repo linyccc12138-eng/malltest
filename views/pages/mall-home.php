@@ -142,7 +142,8 @@
             </div>
             <div class="mt-4 space-y-4">
                 <?php foreach (($homeData['hot_activities'] ?? []) as $activity): ?>
-                    <a href="/mall/activities/<?= (int) $activity['id'] ?>" class="flex items-center gap-3 rounded-[1.4rem] border border-bronze/10 bg-parchment/65 p-4 transition hover:border-bronze/20 hover:bg-parchment/80">
+                    <?php $activityHref = trim((string) ($activity['link_url'] ?? '')) !== '' ? (string) $activity['link_url'] : '/mall/activities/' . (int) $activity['id']; ?>
+                    <a href="<?= htmlspecialchars($activityHref, ENT_QUOTES, 'UTF-8') ?>" class="flex items-center gap-3 rounded-[1.4rem] border border-bronze/10 bg-parchment/65 p-4 transition hover:border-bronze/20 hover:bg-parchment/80">
                         <div class="h-20 w-20 rounded-[1.2rem] bg-cover bg-center"<?= !empty($activity['thumbnail_image']) ? ' style="background-image:url(\'' . htmlspecialchars($activity['thumbnail_image'], ENT_QUOTES, 'UTF-8') . '\')"' : '' ?>>
                             <?php if (!empty($activity['thumbnail_image'])): ?>
                                 <span class="sr-only"><?= htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8') ?></span>
