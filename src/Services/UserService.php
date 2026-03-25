@@ -525,7 +525,7 @@ class UserService
                 null,
                 $request
             );
-            throw new \RuntimeException('该微信未绑定用户，请先登录。');
+            throw new \RuntimeException('该微信未绑定用户，首次访问请使用账号密码登陆。');
         }
 
         return $user;
