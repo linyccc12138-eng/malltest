@@ -262,6 +262,32 @@
             return;
         }
 
+        const removeToastStack = () => {
+            const currentStack = document.querySelector('.toast-stack');
+            if (!currentStack) {
+                return;
+            }
+
+            currentStack.remove();
+        };
+
+        if (!document.body.dataset.toastDismissBound) {
+            document.body.dataset.toastDismissBound = '1';
+            document.addEventListener('click', () => {
+                const currentStack = document.querySelector('.toast-stack');
+                if (!currentStack) {
+                    return;
+                }
+
+                const lastShownAt = Number(currentStack.dataset.lastShownAt || 0);
+                if (Date.now() - lastShownAt < 160) {
+                    return;
+                }
+
+                removeToastStack();
+            }, true);
+        }
+
         let stack = document.querySelector('.toast-stack');
         if (!stack) {
             stack = document.createElement('div');
@@ -269,11 +295,17 @@
             document.body.appendChild(stack);
         }
 
+        stack.dataset.lastShownAt = String(Date.now());
         const item = document.createElement('div');
         item.className = `toast-item ${type}`;
         item.textContent = message;
         stack.appendChild(item);
-        window.setTimeout(() => item.remove(), 2800);
+        window.setTimeout(() => {
+            item.remove();
+            if (!stack.children.length) {
+                stack.remove();
+            }
+        }, 2800);
     };
 
     const ADMIN_UPLOAD_MAX_BYTES = 1536 * 1024;
