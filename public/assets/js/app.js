@@ -262,6 +262,13 @@
             return;
         }
 
+        const noticeText = String(message).trim();
+        const lines = noticeText.split(/\n+/).map((item) => item.trim()).filter(Boolean);
+        const alertMessage = lines[0] || noticeText;
+        const alertDesc = lines.slice(1).join(' ');
+        const styleClass = type === 'error' ? 'style-error' : 'style-info-accent';
+        const iconText = type === 'error' ? '!' : '✓';
+
         const removeToastStack = () => {
             const currentStack = document.querySelector('.toast-stack');
             if (!currentStack) {
@@ -297,8 +304,29 @@
 
         stack.dataset.lastShownAt = String(Date.now());
         const item = document.createElement('div');
-        item.className = `toast-item ${type}`;
-        item.textContent = message;
+        item.className = `toast-item alert-box ${styleClass}`;
+
+        const icon = document.createElement('div');
+        icon.className = 'alert-icon';
+        icon.textContent = iconText;
+
+        const content = document.createElement('div');
+        content.className = 'alert-content';
+
+        const messageNode = document.createElement('div');
+        messageNode.className = 'alert-message';
+        messageNode.textContent = alertMessage;
+        content.appendChild(messageNode);
+
+        if (alertDesc) {
+            const descNode = document.createElement('div');
+            descNode.className = 'alert-desc';
+            descNode.textContent = alertDesc;
+            content.appendChild(descNode);
+        }
+
+        item.appendChild(icon);
+        item.appendChild(content);
         stack.appendChild(item);
         window.setTimeout(() => {
             item.remove();

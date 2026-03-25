@@ -57,45 +57,84 @@ body {
 .toast-item {
     min-width: 240px;
     max-width: 360px;
-    position: relative;
-    overflow: hidden;
-    border-radius: 0.9rem;
-    border: 1.5px solid rgba(255, 255, 255, 0.12);
-    background: rgba(27, 23, 19, 0.92);
-    padding: 0.95rem 1rem;
-    box-shadow: 0 14px 36px rgba(17, 13, 10, 0.32), 0 4px 12px rgba(17, 13, 10, 0.18);
-    color: #fff9f2;
-    line-height: 1.45;
-    backdrop-filter: blur(14px);
     animation: toast-rise 180ms ease-out both;
 }
 
-.toast-item::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 0.22rem;
-    background: rgba(255, 255, 255, 0.18);
+.alert-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 16px 20px;
+    border-radius: 20px;
+    font-size: 14px;
+    line-height: 1.45;
+    transition: transform 0.2s ease, box-shadow 0.2s;
 }
 
-.toast-item.success {
-    border-color: rgba(143, 201, 149, 0.5);
-    color: #f4fff5;
+.alert-icon {
+    flex-shrink: 0;
+    min-width: 20px;
+    font-size: 20px;
+    line-height: 1;
+    margin-top: 1px;
+    font-weight: 700;
+    text-align: center;
 }
 
-.toast-item.success::before {
-    background: #a8d8ae;
+.alert-content {
+    flex: 1;
+    min-width: 0;
 }
 
-.toast-item.error {
-    border-color: rgba(255, 122, 122, 0.58);
-    color: #fff4f4;
+.alert-message {
+    font-weight: 500;
+    margin-bottom: 4px;
+    word-break: break-word;
 }
 
-.toast-item.error::before {
-    background: #ff8e8e;
+.alert-message:last-child {
+    margin-bottom: 0;
+}
+
+.alert-desc {
+    font-size: 13px;
+    word-break: break-word;
+}
+
+.style-error {
+    background: #fef2f0;
+    border-left: 4px solid #e34f2f;
+    box-shadow: 0 4px 10px rgba(227, 79, 47, 0.08);
+}
+
+.style-error .alert-icon {
+    color: #e34f2f;
+}
+
+.style-error .alert-message {
+    color: #bc3f22;
+}
+
+.style-error .alert-desc {
+    color: #7a4a3a;
+}
+
+.style-info-accent {
+    background: #f8fafc;
+    border-left: 4px solid #2c7da0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.style-info-accent .alert-icon {
+    color: #2c7da0;
+}
+
+.style-info-accent .alert-message {
+    color: #1f3e48;
+}
+
+.style-info-accent .alert-desc {
+    color: #4b6a75;
 }
 
 @keyframes toast-rise {
