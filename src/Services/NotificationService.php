@@ -103,7 +103,7 @@ class NotificationService
     private function buildPaidTemplateData(array $order, ?array $user = null): array
     {
         $resolvedUser = $user ?? $this->findUserByOrder($order);
-        $nickname = trim((string) ($resolvedUser['nickname'] ?? $resolvedUser['username'] ?? ''));
+        $nickname = trim((string) ($resolvedUser['nickname'] ?? $resolvedUser['phone'] ?? $resolvedUser['username'] ?? ''));
         $receiverName = trim((string) (($order['address_snapshot']['receiver_name'] ?? $order['receiver_name'] ?? '')));
         $customerName = $this->composeDisplayText([$nickname, $receiverName], '/');
         $summary = $this->firstGoodsSummary($order['items'] ?? []);

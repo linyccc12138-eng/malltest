@@ -113,7 +113,7 @@
             <div class="flex items-center gap-1.5 md:gap-2">
                 <?php if ($currentUser): ?>
                     <a href="/mall/profile" class="rounded-full border border-bronze/25 px-2.5 py-1.5 text-xs text-ink transition hover:border-bronze hover:text-bronze md:px-3 md:py-2 md:text-sm">
-                        <?= htmlspecialchars($currentUser['nickname'] ?? $currentUser['username'] ?? '用户', ENT_QUOTES, 'UTF-8') ?>
+                        <?= htmlspecialchars($currentUser['nickname'] ?? $currentUser['phone'] ?? $currentUser['username'] ?? '用户', ENT_QUOTES, 'UTF-8') ?>
                     </a>
                     <button type="button" data-logout class="rounded-full border border-rose/25 px-3 py-1.5 text-xs text-ink transition hover:border-rose hover:text-rose md:px-4 md:py-2 md:text-sm">
                         退出

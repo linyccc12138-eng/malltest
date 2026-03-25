@@ -9,6 +9,7 @@ return [
     'url' => env('APP_URL', 'http://localhost:8000'),
     'timezone' => env('APP_TIMEZONE', 'Asia/Shanghai'),
     'session_name' => env('SESSION_NAME', 'magic_mall'),
+    'account_api_key' => env('ACCOUNT_API_KEY', ''),
     'session_path' => BASE_PATH . '/storage/sessions',
     'upload_path' => BASE_PATH . '/storage/uploads',
     'base_path' => BASE_PATH,
