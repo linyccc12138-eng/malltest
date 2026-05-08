@@ -43,6 +43,20 @@ class OpenAccountApiController extends BaseController
                 throw new \RuntimeException('缺少微信授权 code。');
             }
 
+            // Mini Program login: use code2session to get mini-program openid
+            $isMiniProgram = (string) $request->input('mp', '') === '1';
+            if ($isMiniProgram) {
+                $miniOpenid = $this->getMiniProgramOpenid($code);
+                if (empty($miniOpenid)) {
+                    throw new \RuntimeException('无法获取小程序身份，请稍后重试。');
+                }
+                $user = $this->users->authenticateWithMpOpenid($miniOpenid, $request);
+                return [
+                    'user' => $this->users->toPublicUser($user),
+                ];
+            }
+
+            // OAuth login (公众号/H5)
             $oauth = $this->wechat->exchangeOauthCode($code);
             $openid = trim((string) ($oauth['openid'] ?? ''));
             if ($openid === '') {
@@ -197,6 +211,12 @@ class OpenAccountApiController extends BaseController
         if ($configuredKey === '' || !hash_equals($configuredKey, $providedKey)) {
             throw new \RuntimeException('开放接口认证失败。', 401);
         }
+    }
+
+    private function getMiniProgramOpenid(string $code): string
+    {
+        $result = $this->wechat->code2session($code);
+        return trim((string) ($result['openid'] ?? ''));
     }
 
     private function parseIds(mixed $value): array
