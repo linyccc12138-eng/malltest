@@ -1401,7 +1401,10 @@ class OrderService
 
         $config = $this->wechat?->payConfig() ?? [];
         $appId = (string) ($payload['appid'] ?? '');
-        if (!empty($config['app_id']) && $appId !== '' && !hash_equals((string) $config['app_id'], $appId)) {
+        $mpAppId = trim((string) ($config['mini_program_app_id'] ?? ''));
+        $oaAppId = trim((string) ($config['app_id'] ?? ''));
+        $validAppIds = array_filter([$oaAppId, $mpAppId], static fn (string $id): bool => $id !== '');
+        if ($appId !== '' && $validAppIds !== [] && !in_array($appId, $validAppIds, true)) {
             throw new \RuntimeException('微信支付通知 AppID 不匹配。');
         }
 
