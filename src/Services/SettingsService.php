@@ -101,7 +101,7 @@ class SettingsService
     public function allForAdmin(): array
     {
         $wechatPay = array_merge($this->defaults()['wechat_pay'], $this->getGroup('wechat_pay'));
-        $wechatPaySensitive = ['merchant_serial_no', 'public_key_id', 'api_v3_key', 'private_key_content', 'public_key_content'];
+        $wechatPaySensitive = ['merchant_serial_no', 'public_key_id', 'api_v3_key', 'private_key_content', 'public_key_content', 'mini_program_app_secret'];
         $captcha = array_merge($this->defaults()['captcha'], $this->getGroup('captcha'));
         $captchaSensitive = ['app_secret_key', 'secret_id', 'secret_key'];
 
@@ -187,6 +187,8 @@ class SettingsService
                 'public_key_content' => '',
                 'notify_url' => '',
                 'pay_mode' => 'JSAPI',
+                'mini_program_app_id' => '',
+                'mini_program_app_secret' => '',
             ],
             'wechat_service_account' => [
                 'app_id' => '',

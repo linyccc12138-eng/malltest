@@ -279,7 +279,7 @@ class AdminApiController extends BaseController
             $encryptedMap = [
                 'membership_mysql' => ['password'],
                 'login_security' => [],
-                'wechat_pay' => ['api_v3_key', 'private_key_content', 'public_key_content'],
+                'wechat_pay' => ['api_v3_key', 'private_key_content', 'public_key_content', 'mini_program_app_secret'],
                 'wechat_service_account' => ['app_secret'],
                 'captcha' => ['app_secret_key', 'secret_id', 'secret_key'],
                 'log' => [],
@@ -386,7 +386,7 @@ class AdminApiController extends BaseController
     private function mergeWechatPaySensitiveValues(array $values): array
     {
         $current = $this->settings->getGroup('wechat_pay');
-        $sensitiveFields = ['merchant_serial_no', 'public_key_id', 'api_v3_key', 'private_key_content', 'public_key_content'];
+        $sensitiveFields = ['merchant_serial_no', 'public_key_id', 'api_v3_key', 'private_key_content', 'public_key_content', 'mini_program_app_secret'];
 
         foreach ($sensitiveFields as $field) {
             $incoming = $values[$field] ?? null;

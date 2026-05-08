@@ -62,6 +62,68 @@ class WechatService
         return $this->httpJson('GET', $url);
     }
 
+    /**
+     * 小程序 code2session：用 wx.login() 返回的临时 code 换取小程序 openid 和 session_key。
+     */
+    public function code2session(string $code): array
+    {
+        $config = $this->payConfig();
+        $appId = (string) ($config['mini_program_app_id'] ?? '');
+        $secret = (string) ($config['mini_program_app_secret'] ?? '');
+
+        if ($appId === '' || $secret === '') {
+            $this->logger->error('wechat_mp', '小程序 code2session 配置缺失', [
+                'has_mini_program_app_id' => $appId !== '',
+                'has_mini_program_app_secret' => $secret !== '',
+                'code_prefix' => substr($code, 0, 8) . '...',
+            ]);
+            throw new \RuntimeException('小程序 AppID 或 AppSecret 未配置，请联系管理员。');
+        }
+
+        $url = 'https://api.weixin.qq.com/sns/jscode2session?' . http_build_query([
+            'appid' => $appId,
+            'secret' => $secret,
+            'js_code' => $code,
+            'grant_type' => 'authorization_code',
+        ]);
+
+        $this->logger->info('wechat_mp', '发起 code2session 请求', [
+            'appid' => $appId,
+            'code_prefix' => substr($code, 0, 8) . '...',
+            'code_len' => strlen($code),
+        ]);
+
+        $result = $this->httpJson('GET', $url);
+
+        $errcode = (int) ($result['errcode'] ?? 0);
+        $errmsg = (string) ($result['errmsg'] ?? '');
+        $openid = (string) ($result['openid'] ?? '');
+        $sessionKey = (string) ($result['session_key'] ?? '');
+        $unionid = (string) ($result['unionid'] ?? '');
+
+        $this->logger->info('wechat_mp', 'code2session 响应', [
+            'errcode' => $errcode,
+            'errmsg' => $errmsg,
+            'has_openid' => $openid !== '',
+            'openid_len' => strlen($openid),
+            'openid_masked' => $openid !== '' ? (substr($openid, 0, 6) . '***' . substr($openid, -6)) : '',
+            'has_session_key' => $sessionKey !== '',
+            'has_unionid' => $unionid !== '',
+            'appid_used' => $appId,
+        ]);
+
+        if ($errcode !== 0) {
+            $this->logger->error('wechat_mp', 'code2session 微信返回错误', [
+                'errcode' => $errcode,
+                'errmsg' => $errmsg,
+                'appid_used' => $appId,
+                'code_valid' => in_array($errcode, [40029, 40163, 41008], true) ? 'code_expired_or_invalid' : 'other',
+            ]);
+        }
+
+        return $result;
+    }
+
     public function buildJsSdkConfig(string $url, array $jsApiList = []): array
     {
         $config = $this->serviceAccountConfig();
@@ -114,8 +176,21 @@ class WechatService
         $this->assertPayVerificationConfig($config);
 
         $mode = strtoupper((string) ($config['pay_mode'] ?? 'JSAPI'));
+
+        // Detect Mini Program payment: use mp_openid and mini_program_app_id when available
+        $mpOpenid = trim((string) ($user['mp_openid'] ?? ''));
+        $oaOpenid = trim((string) ($user['openid'] ?? ''));
+        $isMiniProgram = $mpOpenid !== ''
+            && (!empty($config['mini_program_app_id']))
+            && ($oaOpenid === '' || $mode === 'MINI_PROGRAM');
+
+        $appIdForPay = $isMiniProgram && !empty($config['mini_program_app_id'])
+            ? $config['mini_program_app_id']
+            : $config['app_id'];
+
+        $payerOpenidForLog = '';
         $payload = [
-            'appid' => $config['app_id'],
+            'appid' => $appIdForPay,
             'mchid' => $config['merchant_id'],
             'description' => '奇妙集市订单 ' . ($order['order_no'] ?? ''),
             'out_trade_no' => $order['order_no'],
@@ -137,12 +212,37 @@ class WechatService
                 'h5_info' => ['type' => 'Wap'],
             ];
         } else {
-            if (empty($user['openid'])) {
-                throw new \RuntimeException('JSAPI 支付要求用户已绑定微信 OpenID。');
+            $payerOpenid = $isMiniProgram ? $mpOpenid : $oaOpenid;
+            $payerOpenidForLog = $payerOpenid;
+            if ($payerOpenid === '') {
+                $this->logger->error('wechat_pay', '支付失败：缺少支付 OpenID', [
+                    'order_no' => $order['order_no'] ?? '',
+                    'is_mini_program' => $isMiniProgram,
+                    'user_id' => (int) ($user['id'] ?? 0),
+                    'oa_openid_len' => strlen($oaOpenid),
+                    'mp_openid_len' => strlen($mpOpenid),
+                ]);
+                throw new \RuntimeException($isMiniProgram
+                    ? 'JSAPI 支付要求用户已绑定小程序微信 OpenID，请使用账号密码登录以自动绑定。'
+                    : 'JSAPI 支付要求用户已绑定微信 OpenID。');
             }
             $endpoint = 'https://api.mch.weixin.qq.com/v3/pay/transactions/jsapi';
-            $payload['payer'] = ['openid' => (string) $user['openid']];
+            $payload['payer'] = ['openid' => $payerOpenid];
         }
+
+        // Log payment request details
+        $this->logger->info('wechat_pay', '发起微信支付请求', [
+            'order_no' => $order['order_no'] ?? '',
+            'payable_amount' => (float) ($order['payable_amount'] ?? 0),
+            'amount_fen' => $payload['amount']['total'],
+            'is_mini_program' => $isMiniProgram,
+            'pay_mode' => $mode,
+            'appid_for_pay' => $appIdForPay,
+            'mchid' => $config['merchant_id'],
+            'user_id' => (int) ($user['id'] ?? 0),
+            'payer_openid_masked' => $payerOpenidForLog !== '' ? (substr($payerOpenidForLog, 0, 6) . '***' . substr($payerOpenidForLog, -6)) : '(empty)',
+            'mini_program_app_id_configured' => !empty($config['mini_program_app_id']),
+        ]);
 
         $response = $this->wechatPayRequest('POST', $endpoint, $payload, $config);
 
@@ -163,24 +263,36 @@ class WechatService
         $timestamp = (string) time();
         $nonceStr = bin2hex(random_bytes(8));
         $package = 'prepay_id=' . $prepayId;
-        $stringToSign = implode("\n", [$config['app_id'], $timestamp, $nonceStr, $package]) . "\n";
+        $stringToSign = implode("\n", [$appIdForPay, $timestamp, $nonceStr, $package]) . "\n";
         $privateKey = openssl_pkey_get_private((string) $config['private_key_content']);
         if ($privateKey === false) {
             throw new \RuntimeException('商户私钥内容无效。');
         }
         openssl_sign($stringToSign, $signature, $privateKey, OPENSSL_ALGO_SHA256);
 
+        $paySign = base64_encode($signature);
+        $payParams = [
+            'appId' => $appIdForPay,
+            'timeStamp' => $timestamp,
+            'nonceStr' => $nonceStr,
+            'package' => $package,
+            'signType' => 'RSA',
+            'paySign' => $paySign,
+        ];
+
+        $this->logger->info('wechat_pay', '微信支付参数生成成功', [
+            'order_no' => $order['order_no'] ?? '',
+            'prepay_id' => $prepayId,
+            'appid' => $appIdForPay,
+            'timestamp' => $timestamp,
+            'is_mini_program' => $isMiniProgram,
+            'pay_sign_len' => strlen($paySign),
+        ]);
+
         return [
             'mode' => 'JSAPI',
             'message' => '微信 JSAPI 支付参数创建成功。',
-            'pay_params' => [
-                'appId' => $config['app_id'],
-                'timeStamp' => $timestamp,
-                'nonceStr' => $nonceStr,
-                'package' => $package,
-                'signType' => 'RSA',
-                'paySign' => base64_encode($signature),
-            ],
+            'pay_params' => $payParams,
             'raw' => $response,
         ];
     }

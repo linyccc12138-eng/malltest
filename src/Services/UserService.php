@@ -36,7 +36,7 @@ class UserService
         }
 
         $stmt = $this->db->mall()->prepare(
-            'SELECT id, username, nickname, phone, role, openid, membership_member_id, status, last_login_at, created_at
+            'SELECT id, username, nickname, phone, role, openid, mp_openid, membership_member_id, status, last_login_at, created_at
              FROM mall_users
              WHERE id = :id'
         );
@@ -82,6 +82,29 @@ class UserService
         $this->logger->info(
             'wechat_auth',
             '微信登录成功',
+            $this->openidLogContext($normalizedOpenid) + [
+                'login_user_id' => (int) $user['id'],
+                'login_phone' => (string) ($user['phone'] ?? ''),
+            ],
+            (int) $user['id'],
+            $request
+        );
+
+        return $this->publicUserPayload($user);
+    }
+
+    public function loginWithMpOpenid(string $mpOpenid, Request $request): array
+    {
+        $normalizedOpenid = $this->normalizeOpenid($mpOpenid);
+        $user = $this->authenticateWithMpOpenid($normalizedOpenid, $request);
+        $this->assertNoActiveLoginLocks($request->ip(), $user, $request);
+        $this->clearLoginLockoutState($request->ip(), $user, $request, 'wechat_mp_login_success');
+        $this->session->put('auth_user_id', (int) $user['id']);
+        $this->touchLastLogin((int) $user['id']);
+
+        $this->logger->info(
+            'wechat_mp',
+            '小程序微信登录成功',
             $this->openidLogContext($normalizedOpenid) + [
                 'login_user_id' => (int) $user['id'],
                 'login_phone' => (string) ($user['phone'] ?? ''),
@@ -217,10 +240,11 @@ class UserService
         $this->assertPhoneUnique($phone, null);
         $this->assertMembershipBindingAvailable($membershipMemberId, null, $allowDuplicateMembership);
         $this->assertOpenidAvailable($data['openid'] ?? null, null);
+        $this->assertMpOpenidAvailable($data['mp_openid'] ?? null, null);
 
         $stmt = $this->db->mall()->prepare(
-            'INSERT INTO mall_users (username, password_hash, nickname, phone, role, openid, membership_member_id, status, created_at, updated_at)
-             VALUES (:username, :password_hash, :nickname, :phone, :role, :openid, :membership_member_id, :status, :created_at, :updated_at)'
+            'INSERT INTO mall_users (username, password_hash, nickname, phone, role, openid, mp_openid, membership_member_id, status, created_at, updated_at)
+             VALUES (:username, :password_hash, :nickname, :phone, :role, :openid, :mp_openid, :membership_member_id, :status, :created_at, :updated_at)'
         );
         $stmt->execute([
             ':username' => $username,
@@ -229,6 +253,7 @@ class UserService
             ':phone' => $phone,
             ':role' => (string) ($data['role'] ?? 'customer'),
             ':openid' => $this->normalizeOpenid($data['openid'] ?? null),
+            ':mp_openid' => $this->normalizeOpenid($data['mp_openid'] ?? null),
             ':membership_member_id' => $membershipMemberId,
             ':status' => (string) ($data['status'] ?? 'active'),
             ':created_at' => now(),
@@ -288,6 +313,7 @@ class UserService
         $this->assertPhoneUnique($phone, $userId);
         $this->assertMembershipBindingAvailable($membershipMemberId, $userId, $allowDuplicateMembership);
         $this->assertOpenidAvailable($data['openid'] ?? ($existing['openid'] ?? null), $userId);
+        $this->assertMpOpenidAvailable($data['mp_openid'] ?? ($existing['mp_openid'] ?? null), $userId);
 
         $passwordSql = '';
         $params = [
@@ -297,6 +323,7 @@ class UserService
             ':phone' => $phone,
             ':role' => (string) ($data['role'] ?? $existing['role'] ?? 'customer'),
             ':openid' => $this->normalizeOpenid($data['openid'] ?? ($existing['openid'] ?? null)),
+            ':mp_openid' => $this->normalizeOpenid($data['mp_openid'] ?? ($existing['mp_openid'] ?? null)),
             ':membership_member_id' => $membershipMemberId,
             ':status' => (string) ($data['status'] ?? $existing['status'] ?? 'active'),
             ':updated_at' => now(),
@@ -311,7 +338,7 @@ class UserService
         }
 
         $sql = 'UPDATE mall_users
-                SET username = :username, nickname = :nickname, phone = :phone, role = :role, openid = :openid,
+                SET username = :username, nickname = :nickname, phone = :phone, role = :role, openid = :openid, mp_openid = :mp_openid,
                     membership_member_id = :membership_member_id, status = :status, updated_at = :updated_at'
             . $passwordSql .
             ' WHERE id = :id';
@@ -531,6 +558,31 @@ class UserService
         return $user;
     }
 
+    public function authenticateWithMpOpenid(?string $mpOpenid, Request $request): array
+    {
+        if ($mpOpenid === null) {
+            $this->logger->warning('wechat_mp', '小程序微信登录失败：openid 为空', [], null, $request);
+            throw new \RuntimeException('尚未获取当前小程序微信身份，请稍后重试。');
+        }
+
+        $user = $this->findUserByMpOpenid($mpOpenid);
+        if (!$user || ($user['status'] ?? 'disabled') !== 'active') {
+            $this->logger->warning(
+                'wechat_mp',
+                '小程序微信登录失败，未找到已绑定的有效用户',
+                $this->openidLogContext($mpOpenid) + [
+                    'user_found' => $user !== null,
+                    'user_status' => $user['status'] ?? '(no user)',
+                ],
+                null,
+                $request
+            );
+            throw new \RuntimeException('该微信未绑定账号，首次访问请使用账号密码登录，登录后将自动完成绑定。');
+        }
+
+        return $user;
+    }
+
     public function searchUsers(array $ids = [], string $keyword = '', int $page = 1, int $pageSize = 20): array
     {
         $page = max(1, $page);
@@ -574,6 +626,7 @@ class UserService
         $stmt = $this->db->mall()->prepare(
             'SELECT id, username, nickname, phone, role,
                     CASE WHEN openid IS NOT NULL AND openid <> \'\' THEN 1 ELSE 0 END AS wechat_bound,
+                    CASE WHEN mp_openid IS NOT NULL AND mp_openid <> \'\' THEN 1 ELSE 0 END AS mp_wechat_bound,
                     membership_member_id, status, last_login_at, created_at
              FROM mall_users'
             . $whereSql .
@@ -606,7 +659,7 @@ class UserService
     public function findUser(int $userId): ?array
     {
         $stmt = $this->db->mall()->prepare(
-            'SELECT id, username, nickname, phone, role, openid, membership_member_id, status, last_login_at, created_at
+            'SELECT id, username, nickname, phone, role, openid, mp_openid, membership_member_id, status, last_login_at, created_at
              FROM mall_users
              WHERE id = :id'
         );
@@ -623,13 +676,39 @@ class UserService
         }
 
         $stmt = $this->db->mall()->prepare(
-            'SELECT id, username, nickname, phone, role, openid, membership_member_id, status, last_login_at, created_at
+            'SELECT id, username, nickname, phone, role, openid, mp_openid, membership_member_id, status, last_login_at, created_at
              FROM mall_users
              WHERE openid = :openid
              LIMIT 1'
         );
         $stmt->execute([':openid' => $normalizedOpenid]);
         $row = $stmt->fetch();
+        return $row ?: null;
+    }
+
+    public function findUserByMpOpenid(string $mpOpenid): ?array
+    {
+        $normalizedOpenid = $this->normalizeOpenid($mpOpenid);
+        if ($normalizedOpenid === null) {
+            $this->logger->info('wechat_mp', 'findUserByMpOpenid 查询跳过：openid 为空', []);
+            return null;
+        }
+
+        $stmt = $this->db->mall()->prepare(
+            'SELECT id, username, nickname, phone, role, openid, mp_openid, membership_member_id, status, last_login_at, created_at
+             FROM mall_users
+             WHERE mp_openid = :mp_openid
+             LIMIT 1'
+        );
+        $stmt->execute([':mp_openid' => $normalizedOpenid]);
+        $row = $stmt->fetch();
+
+        $this->logger->info('wechat_mp', 'findUserByMpOpenid 查询结果', [
+            'mp_openid_masked' => substr($normalizedOpenid, 0, 6) . '***' . substr($normalizedOpenid, -6),
+            'user_found' => (bool) $row,
+            'found_user_id' => $row ? (int) ($row['id'] ?? 0) : null,
+        ]);
+
         return $row ?: null;
     }
 
@@ -724,6 +803,128 @@ class UserService
             'wechat_auth',
             '微信解绑成功',
             $this->openidLogContext($currentOpenid) + [
+                'unbind_user_id' => $userId,
+                'unbind_phone' => (string) ($user['phone'] ?? ''),
+            ],
+            $userId,
+            $request
+        );
+
+        return $this->findUser($userId) ?? [];
+    }
+
+    public function bindMpOpenid(int $userId, string $mpOpenid, Request $request): array
+    {
+        $normalizedOpenid = $this->normalizeOpenid($mpOpenid);
+        if ($normalizedOpenid === null) {
+            $this->logger->warning('wechat_mp', '小程序微信绑定失败：openid 为空', [
+                'bind_user_id' => $userId,
+            ], $userId, $request);
+            throw new \RuntimeException('尚未获取当前微信身份，请稍后重试。');
+        }
+
+        $user = $this->findUser($userId);
+        if (!$user) {
+            $this->logger->warning('wechat_mp', '小程序微信绑定失败：用户不存在', [
+                'bind_user_id' => $userId,
+            ], null, $request);
+            throw new \RuntimeException('当前用户不存在。');
+        }
+
+        $currentMpOpenid = $this->normalizeOpenid($user['mp_openid'] ?? null);
+        if ($currentMpOpenid !== null && $currentMpOpenid === $normalizedOpenid) {
+            $this->logger->info(
+                'wechat_mp',
+                '小程序微信绑定已存在，跳过重复绑定',
+                $this->openidLogContext($normalizedOpenid) + ['bind_user_id' => $userId],
+                $userId,
+                $request
+            );
+            return $this->findUser($userId) ?? [];
+        }
+
+        if ($currentMpOpenid !== null) {
+            $this->logger->warning(
+                'wechat_mp',
+                '小程序微信绑定失败：账号已绑定其他微信',
+                $this->openidLogContext($currentMpOpenid) + [
+                    'bind_user_id' => $userId,
+                    'attempt_openid_masked' => substr($normalizedOpenid, 0, 6) . '***' . substr($normalizedOpenid, -6),
+                ],
+                $userId,
+                $request
+            );
+            throw new \RuntimeException('当前账号已绑定小程序微信，请先解绑后再绑定新的微信账号。');
+        }
+
+        $duplicate = $this->findUserByMpOpenid($normalizedOpenid);
+        if ($duplicate && (int) $duplicate['id'] !== $userId) {
+            $this->logger->warning(
+                'wechat_mp',
+                '小程序微信绑定失败：mp_openid 已绑定其他用户',
+                $this->openidLogContext($normalizedOpenid) + [
+                    'bind_user_id' => $userId,
+                    'duplicate_user_id' => (int) $duplicate['id'],
+                ],
+                $userId,
+                $request
+            );
+            throw new \RuntimeException('该小程序微信已绑定其他用户，请先解绑后再操作。');
+        }
+
+        $stmt = $this->db->mall()->prepare(
+            'UPDATE mall_users SET mp_openid = :mp_openid, updated_at = :updated_at WHERE id = :id'
+        );
+        $stmt->execute([
+            ':mp_openid' => $normalizedOpenid,
+            ':updated_at' => now(),
+            ':id' => $userId,
+        ]);
+
+        $this->logger->info(
+            'wechat_mp',
+            '小程序微信绑定成功',
+            $this->openidLogContext($normalizedOpenid) + [
+                'bind_user_id' => $userId,
+                'bind_phone' => (string) ($user['phone'] ?? ''),
+            ],
+            $userId,
+            $request
+        );
+
+        return $this->findUser($userId) ?? [];
+    }
+
+    public function unbindMpOpenid(int $userId, Request $request): array
+    {
+        $user = $this->findUser($userId);
+        if (!$user) {
+            $this->logger->warning('wechat_mp', '小程序微信解绑失败：用户不存在', [
+                'unbind_user_id' => $userId,
+            ], null, $request);
+            throw new \RuntimeException('当前用户不存在。');
+        }
+
+        $currentMpOpenid = $this->normalizeOpenid($user['mp_openid'] ?? null);
+        if ($currentMpOpenid === null) {
+            $this->logger->info('wechat_mp', '小程序微信解绑跳过：账号未绑定', [
+                'unbind_user_id' => $userId,
+            ], $userId, $request);
+            throw new \RuntimeException('当前账号尚未绑定小程序微信。');
+        }
+
+        $stmt = $this->db->mall()->prepare(
+            'UPDATE mall_users SET mp_openid = NULL, updated_at = :updated_at WHERE id = :id'
+        );
+        $stmt->execute([
+            ':updated_at' => now(),
+            ':id' => $userId,
+        ]);
+
+        $this->logger->info(
+            'wechat_mp',
+            '小程序微信解绑成功',
+            $this->openidLogContext($currentMpOpenid) + [
                 'unbind_user_id' => $userId,
                 'unbind_phone' => (string) ($user['phone'] ?? ''),
             ],
@@ -1236,7 +1437,30 @@ class UserService
 
         $duplicate = $this->findUserByOpenid($normalizedOpenid);
         if ($duplicate && (int) $duplicate['id'] !== (int) ($excludeUserId ?? 0)) {
+            $this->logger->warning('wechat_auth', 'OpenID 已被其他用户绑定', [
+                'openid_masked' => substr($normalizedOpenid, 0, 6) . '***' . substr($normalizedOpenid, -6),
+                'duplicate_user_id' => (int) $duplicate['id'],
+                'exclude_user_id' => $excludeUserId,
+            ]);
             throw new \RuntimeException('该微信 OpenID 已绑定其他用户。');
+        }
+    }
+
+    private function assertMpOpenidAvailable(mixed $mpOpenid, ?int $excludeUserId): void
+    {
+        $normalizedOpenid = $this->normalizeOpenid($mpOpenid);
+        if ($normalizedOpenid === null) {
+            return;
+        }
+
+        $duplicate = $this->findUserByMpOpenid($normalizedOpenid);
+        if ($duplicate && (int) $duplicate['id'] !== (int) ($excludeUserId ?? 0)) {
+            $this->logger->warning('wechat_mp', '小程序 OpenID 已被其他用户绑定', [
+                'mp_openid_masked' => substr($normalizedOpenid, 0, 6) . '***' . substr($normalizedOpenid, -6),
+                'duplicate_user_id' => (int) $duplicate['id'],
+                'exclude_user_id' => $excludeUserId,
+            ]);
+            throw new \RuntimeException('该小程序微信 OpenID 已绑定其他用户。');
         }
     }
 
@@ -1306,7 +1530,7 @@ class UserService
     private function findAuthUserByPhone(string $phone): ?array
     {
         $stmt = $this->db->mall()->prepare(
-            'SELECT id, username, nickname, phone, password_hash, role, openid, membership_member_id, status, last_login_at, created_at
+            'SELECT id, username, nickname, phone, password_hash, role, openid, mp_openid, membership_member_id, status, last_login_at, created_at
              FROM mall_users
              WHERE phone = :phone
              LIMIT 1'
@@ -1319,7 +1543,7 @@ class UserService
     private function findAuthAdminByUsername(string $username): ?array
     {
         $stmt = $this->db->mall()->prepare(
-            'SELECT id, username, nickname, phone, password_hash, role, openid, membership_member_id, status, last_login_at, created_at
+            'SELECT id, username, nickname, phone, password_hash, role, openid, mp_openid, membership_member_id, status, last_login_at, created_at
              FROM mall_users
              WHERE username = :username AND role = :role
              LIMIT 1'
@@ -1341,6 +1565,7 @@ class UserService
     private function publicUserPayload(array $user): array
     {
         $openid = trim((string) ($user['openid'] ?? ''));
+        $mpOpenid = trim((string) ($user['mp_openid'] ?? ''));
 
         return [
             'id' => (int) ($user['id'] ?? 0),
@@ -1353,6 +1578,9 @@ class UserService
             'wechat_bound' => array_key_exists('wechat_bound', $user)
                 ? (int) ($user['wechat_bound'] ?? 0) === 1
                 : $openid !== '',
+            'mp_wechat_bound' => array_key_exists('mp_wechat_bound', $user)
+                ? (int) ($user['mp_wechat_bound'] ?? 0) === 1
+                : $mpOpenid !== '',
             'last_login_at' => $user['last_login_at'] ?? null,
             'created_at' => $user['created_at'] ?? null,
         ];

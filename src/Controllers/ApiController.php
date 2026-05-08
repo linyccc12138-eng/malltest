@@ -43,11 +43,54 @@ class ApiController extends BaseController
     {
         return $this->respond(function () use ($request): array {
             $this->validateCsrf($request);
+            $phone = trim((string) $request->input('phone', ''));
             $result = $this->users->login(
-                trim((string) $request->input('phone', '')),
+                $phone,
                 (string) $request->input('password', ''),
                 $request
             );
+
+            // Auto-bind Mini Program openid when logging in from Mini Program
+            $mpCode = trim((string) $request->input('mp_code', ''));
+            if ($mpCode !== '') {
+                $userId = (int) ($result['id'] ?? 0);
+                if ($userId > 0) {
+                    try {
+                        $this->logger()->info('wechat_mp', '手机登录后尝试自动绑定小程序 openid', [
+                            'user_id' => $userId,
+                            'phone' => $phone,
+                            'mp_code_prefix' => substr($mpCode, 0, 8) . '...',
+                        ], $userId, $request);
+
+                        $miniOpenid = $this->getMiniProgramOpenid($mpCode);
+                        if (!empty($miniOpenid)) {
+                            $existing = $this->users->findUserByMpOpenid($miniOpenid);
+                            if (!$existing || (int) $existing['id'] === $userId) {
+                                $this->users->bindMpOpenid($userId, $miniOpenid, $request);
+                                $result = $this->users->findUser($userId) ?? $result;
+                                $this->logger()->info('wechat_mp', '手机登录后自动绑定小程序 openid 成功', [
+                                    'user_id' => $userId,
+                                ], $userId, $request);
+                            } else {
+                                $this->logger()->warning('wechat_mp', '手机登录后自动绑定跳过：mp_openid 已绑定其他用户', [
+                                    'user_id' => $userId,
+                                    'duplicate_user_id' => (int) $existing['id'],
+                                ], $userId, $request);
+                            }
+                        } else {
+                            $this->logger()->warning('wechat_mp', '手机登录后自动绑定失败：未能获取小程序 openid', [
+                                'user_id' => $userId,
+                            ], $userId, $request);
+                        }
+                    } catch (\Throwable $e) {
+                        // Auto-bind failure should not block login
+                        $this->logger()->warning('wechat_mp', '手机登录后自动绑定小程序 openid 异常', [
+                            'user_id' => $userId,
+                            'error' => $e->getMessage(),
+                        ], $userId, $request);
+                    }
+                }
+            }
 
             return ['user' => $result];
         });
@@ -60,17 +103,56 @@ class ApiController extends BaseController
 
     public function wechatLogin(Request $request, array $params = []): Response
     {
-        return $this->respond(function () use ($request): array {
+        return $this->respond(function () use ($request, $params): array {
             $this->validateCsrf($request);
 
+            $isMiniProgram = (string) $request->header('X-Mini-Program', '') === '1';
+            $loginCode = trim((string) $request->input('code', ''));
+
+            if ($isMiniProgram && $loginCode !== '') {
+                // Mini Program login: use code2session to get mini-program openid
+                $this->logger()->info('wechat_mp', '收到小程序微信登录请求', [
+                    'code_prefix' => substr($loginCode, 0, 8) . '...',
+                    'code_len' => strlen($loginCode),
+                    'is_mini_program' => $isMiniProgram,
+                ], null, $request);
+
+                $miniOpenid = $this->getMiniProgramOpenid($loginCode);
+                if (empty($miniOpenid)) {
+                    $this->logger()->error('wechat_mp', '小程序微信登录失败：code2session 返回空 openid', [
+                        'code_prefix' => substr($loginCode, 0, 8) . '...',
+                    ], null, $request);
+                    throw new \RuntimeException('无法获取小程序身份，请稍后重试。');
+                }
+
+                $this->logger()->info('wechat_mp', '小程序微信登录：code2session 成功，尝试查找用户', [
+                    'mp_openid_masked' => substr($miniOpenid, 0, 6) . '***' . substr($miniOpenid, -6),
+                ], null, $request);
+
+                return ['user' => $this->users->loginWithMpOpenid($miniOpenid, $request)];
+            }
+
+            // Web/H5 login: use OAuth openid from session
             $oauthOpenid = $this->currentOauthOpenid();
             if ($oauthOpenid === '') {
+                if ($isMiniProgram) {
+                    $this->logger()->warning('wechat_mp', '小程序微信登录：未提供 code', [
+                        'has_code' => (string) $request->input('code', '') !== '',
+                        'code_empty' => $loginCode === '',
+                    ], null, $request);
+                    throw new \RuntimeException('未获取到小程序登录凭证，请重新进入小程序。');
+                }
+
                 if (!$this->isWechatClient($request)) {
                     throw new \RuntimeException('请在微信客户端中打开。');
                 }
 
                 throw new \RuntimeException('尚未获取当前微信身份，请稍后重试。');
             }
+
+            $this->logger()->info('wechat_auth', 'Web/H5 微信登录：使用 OAuth openid', [
+                'oauth_openid_masked' => $this->maskOpenid($oauthOpenid),
+            ], null, $request);
 
             return ['user' => $this->users->loginWithOpenid($oauthOpenid, $request)];
         });
@@ -355,8 +437,22 @@ class ApiController extends BaseController
             $userOpenid = trim((string) ($user['openid'] ?? ''));
             $currentMatches = $oauthOpenid !== '' && $userOpenid !== '' && hash_equals($userOpenid, $oauthOpenid);
 
+            // Mini Program binding status
+            $userMpOpenid = trim((string) ($user['mp_openid'] ?? ''));
+            $isMiniProgram = (string) $request->header('X-Mini-Program', '') === '1';
+
+            $this->logger()->info('wechat_mp', '微信状态查询', [
+                'is_mini_program' => $isMiniProgram,
+                'is_wechat_client' => $this->isWechatClient($request),
+                'user_id' => $user ? (int) $user['id'] : null,
+                'oa_bound' => $userOpenid !== '',
+                'mp_bound' => $userMpOpenid !== '',
+                'oauth_openid_ready' => $oauthOpenid !== '',
+            ], $user ? (int) $user['id'] : null, $request);
+
             return [
                 'is_wechat_client' => $this->isWechatClient($request),
+                'is_mini_program' => $isMiniProgram,
                 'oauth_openid_ready' => $oauthOpenid !== '',
                 'oauth_openid_masked' => $this->maskOpenid($oauthOpenid),
                 'user_has_openid' => $userOpenid !== '',
@@ -365,6 +461,12 @@ class ApiController extends BaseController
                 'oauth_openid_bound_to_other_user' => (bool) ($oauthOwner && (!$user || (int) $oauthOwner['id'] !== (int) $user['id'])),
                 'can_bind_current_wechat' => (bool) ($user && $userOpenid === '' && $oauthOpenid !== '' && (!$oauthOwner || (int) $oauthOwner['id'] === (int) $user['id'])),
                 'can_unbind_current_wechat' => (bool) ($user && $userOpenid !== ''),
+                // Mini Program specific status
+                'user_has_mp_openid' => $userMpOpenid !== '',
+                'user_mp_openid_masked' => $this->maskOpenid($userMpOpenid),
+                'mp_wechat_bound' => $userMpOpenid !== '',
+                'can_bind_mp_wechat' => (bool) ($user && $userMpOpenid === ''),
+                'can_unbind_mp_wechat' => (bool) ($user && $userMpOpenid !== ''),
             ];
         });
     }
@@ -399,6 +501,60 @@ class ApiController extends BaseController
             return [
                 'message' => '微信解绑成功。',
                 'user' => $this->users->unbindOpenid((int) $user['id'], $request),
+            ];
+        });
+    }
+
+    public function bindMpWechat(Request $request, array $params = []): Response
+    {
+        return $this->respond(function () use ($request, $params): array {
+            $this->validateCsrf($request);
+            $user = $this->users->requireUser();
+
+            $code = trim((string) $request->input('code', ''));
+            if ($code === '') {
+                $this->logger()->warning('wechat_mp', '小程序绑定失败：缺少 code', [
+                    'user_id' => (int) $user['id'],
+                ], (int) $user['id'], $request);
+                throw new \RuntimeException('获取小程序登录凭证失败，请稍后重试。');
+            }
+
+            $this->logger()->info('wechat_mp', '开始小程序微信绑定', [
+                'user_id' => (int) $user['id'],
+                'phone' => (string) ($user['phone'] ?? ''),
+                'code_prefix' => substr($code, 0, 8) . '...',
+            ], (int) $user['id'], $request);
+
+            $miniOpenid = $this->getMiniProgramOpenid($code);
+            if (empty($miniOpenid)) {
+                $this->logger()->error('wechat_mp', '小程序绑定失败：code2session 返回空 openid', [
+                    'user_id' => (int) $user['id'],
+                ], (int) $user['id'], $request);
+                throw new \RuntimeException('无法获取小程序微信身份，请稍后重试。');
+            }
+
+            return [
+                'message' => '小程序微信绑定成功。',
+                'user' => $this->users->bindMpOpenid((int) $user['id'], $miniOpenid, $request),
+            ];
+        });
+    }
+
+    public function unbindMpWechat(Request $request, array $params = []): Response
+    {
+        return $this->respond(function () use ($request): array {
+            $this->validateCsrf($request);
+            $user = $this->users->requireUser();
+
+            $this->logger()->info('wechat_mp', '开始小程序微信解绑', [
+                'user_id' => (int) $user['id'],
+                'phone' => (string) ($user['phone'] ?? ''),
+                'current_mp_bound' => !empty($user['mp_openid']),
+            ], (int) $user['id'], $request);
+
+            return [
+                'message' => '小程序微信解绑成功。',
+                'user' => $this->users->unbindMpOpenid((int) $user['id'], $request),
             ];
         });
     }
@@ -602,6 +758,27 @@ class ApiController extends BaseController
         return $valid;
     }
 
+    private function getMiniProgramOpenid(string $code): string
+    {
+        $this->logger()->info('wechat_mp', '调用 code2session 换取小程序 openid', [
+            'code_prefix' => substr($code, 0, 8) . '...',
+            'code_len' => strlen($code),
+        ]);
+
+        $result = $this->wechat->code2session($code);
+        $openid = trim((string) ($result['openid'] ?? ''));
+
+        $this->logger()->info('wechat_mp', 'code2session 结果', [
+            'has_openid' => $openid !== '',
+            'openid_len' => strlen($openid),
+            'openid_masked' => $openid !== '' ? $this->maskOpenid($openid) : '',
+            'errcode' => (int) ($result['errcode'] ?? 0),
+            'errmsg' => (string) ($result['errmsg'] ?? ''),
+        ]);
+
+        return $openid;
+    }
+
     private function maskOpenid(string $openid): string
     {
         if ($openid === '') {
@@ -628,7 +805,14 @@ class ApiController extends BaseController
     private function respond(callable $callback): Response
     {
         try {
-            return $this->json(['success' => true, 'data' => $callback()]);
+            $result = ['success' => true, 'data' => $callback()];
+            // For Mini Program requests, include session_id in response body
+            // because Mini Programs don't handle cookies automatically
+            $xMiniProgram = (string) ($_SERVER['HTTP_X_MINI_PROGRAM'] ?? '');
+            if ($xMiniProgram === '1') {
+                $result['_session_id'] = session_id();
+            }
+            return $this->json($result);
         } catch (ApiException $exception) {
             return $this->json([
                 'success' => false,

@@ -125,6 +125,8 @@ $router->get('/mall/api/wechat/oauth-url', [$apiController, 'wechatOauthUrl']);
 $router->get('/mall/api/wechat/status', [$apiController, 'wechatStatus']);
 $router->post('/mall/api/wechat/bind', [$apiController, 'bindWechatCurrent']);
 $router->post('/mall/api/wechat/unbind', [$apiController, 'unbindWechatCurrent']);
+$router->post('/mall/api/wechat/bind-mp', [$apiController, 'bindMpWechat']);
+$router->post('/mall/api/wechat/unbind-mp', [$apiController, 'unbindMpWechat']);
 $router->get('/mall/api/wechat/jssdk-config', [$apiController, 'wechatJsSdkConfig']);
 $router->get('/mall/api/wechat/callback', [$apiController, 'wechatCallback']);
 $router->post('/mall/api/wechat/notify', [$apiController, 'wechatNotify']);
