@@ -70,12 +70,27 @@ class NotificationService
         }
 
         $templateId = (string) ($config[$notificationKey . '_template_id'] ?? '');
-        if ($templateId === '' || empty($user['openid'])) {
+        if ($templateId === '') {
+            return;
+        }
+
+        $oaOpenid = trim((string) ($user['openid'] ?? ''));
+        $mpOpenid = trim((string) ($user['mp_openid'] ?? ''));
+
+        // Mini Program openid cannot receive 公众号 template messages.
+        // Only send user notification when the user has a service account (OAuth) openid.
+        if ($oaOpenid === '') {
+            $this->logger->info('notification', '跳过用户模板消息：无服务号 OpenID', [
+                'event' => $eventKey,
+                'order_no' => $order['order_no'] ?? '',
+                'user_id' => (int) ($user['id'] ?? 0),
+                'has_mp_openid' => $mpOpenid !== '',
+            ]);
             return;
         }
 
         $result = $this->wechat->sendTemplateMessage(
-            (string) $user['openid'],
+            $oaOpenid,
             $templateId,
             $this->buildTemplateData($notificationKey, $order, $user),
             $this->buildOrderDetailPath($order)
@@ -85,7 +100,16 @@ class NotificationService
             $this->logger->warning('notification', '微信模板消息发送失败', [
                 'event' => $eventKey,
                 'order_no' => $order['order_no'] ?? '',
+                'user_id' => (int) ($user['id'] ?? 0),
+                'openid_masked' => $this->maskOpenid($oaOpenid),
                 'response' => $result,
+            ]);
+        } else {
+            $this->logger->info('notification', '用户模板消息发送成功', [
+                'event' => $eventKey,
+                'order_no' => $order['order_no'] ?? '',
+                'user_id' => (int) ($user['id'] ?? 0),
+                'openid_masked' => $this->maskOpenid($oaOpenid),
             ]);
         }
     }
@@ -228,6 +252,17 @@ class NotificationService
         ), static fn (string $value): bool => $value !== ''));
 
         return implode($separator, $filtered);
+    }
+
+    private function maskOpenid(string $openid): string
+    {
+        if ($openid === '') {
+            return '';
+        }
+        if (strlen($openid) <= 8) {
+            return substr($openid, 0, 2) . '***';
+        }
+        return substr($openid, 0, 6) . '***' . substr($openid, -6);
     }
 
     private function buildOrderDetailPath(array $order): string
