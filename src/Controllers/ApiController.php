@@ -239,7 +239,7 @@ class ApiController extends BaseController
             $user = $this->users->requireUser();
 
             return [
-                'user' => $this->users->findUser((int) $user['id']),
+                'user' => $this->users->toPublicUser($this->users->findUser((int) $user['id']) ?? []),
                 'member' => $this->membership->getMallUserMember((int) $user['id']),
             ];
         });
