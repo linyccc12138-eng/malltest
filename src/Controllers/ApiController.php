@@ -374,7 +374,8 @@ class ApiController extends BaseController
         return $this->respond(function () use ($request, $params): array {
             $this->validateCsrf($request);
             $user = $this->users->requireUser();
-            return $this->orders->startWechatPay((int) $user['id'], (int) ($params['id'] ?? 0), $request->ip());
+            $isMiniProgram = (string) $request->header('X-Mini-Program', '') === '1';
+            return $this->orders->startWechatPay((int) $user['id'], (int) ($params['id'] ?? 0), $request->ip(), $isMiniProgram);
         });
     }
 

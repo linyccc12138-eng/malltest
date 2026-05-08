@@ -371,7 +371,7 @@ class OrderService
         }
     }
 
-    public function startWechatPay(int $userId, int $orderId, string $clientIp = ''): array
+    public function startWechatPay(int $userId, int $orderId, string $clientIp = '', bool $isMiniProgram = false): array
     {
         if (!$this->wechat) {
             throw new \RuntimeException('微信支付服务未启用。');
@@ -386,7 +386,7 @@ class OrderService
         $paymentNo = $this->generatePaymentNo();
         $order['client_ip'] = $clientIp;
         try {
-            $payPayload = $this->wechat->createPayOrder($order, $user);
+            $payPayload = $this->wechat->createPayOrder($order, $user, $isMiniProgram);
         } catch (\Throwable $throwable) {
             $this->logger->warning('wechat', '发起微信支付失败', [
                 'order_id' => $orderId,

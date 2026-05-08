@@ -169,7 +169,7 @@ class WechatService
         ];
     }
 
-    public function createPayOrder(array $order, array $user): array
+    public function createPayOrder(array $order, array $user, bool $isMiniProgram = false): array
     {
         $config = $this->payConfig();
         $this->assertPayFields($config, ['app_id', 'merchant_id', 'merchant_serial_no', 'api_v3_key', 'private_key_content', 'notify_url']);
@@ -177,14 +177,10 @@ class WechatService
 
         $mode = strtoupper((string) ($config['pay_mode'] ?? 'JSAPI'));
 
-        // Detect Mini Program payment: use mp_openid and mini_program_app_id when available
+        // Determine appId: Mini Program uses mini_program_app_id, otherwise uses default app_id
         $mpOpenid = trim((string) ($user['mp_openid'] ?? ''));
         $oaOpenid = trim((string) ($user['openid'] ?? ''));
-        $isMiniProgram = $mpOpenid !== ''
-            && (!empty($config['mini_program_app_id']))
-            && ($oaOpenid === '' || $mode === 'MINI_PROGRAM');
-
-        $appIdForPay = $isMiniProgram && !empty($config['mini_program_app_id'])
+        $appIdForPay = ($isMiniProgram && !empty($config['mini_program_app_id']))
             ? $config['mini_program_app_id']
             : $config['app_id'];
 
