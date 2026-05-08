@@ -99,6 +99,7 @@ $router->post('/mall/api/auth/wechat-login', [$apiController, 'wechatLogin']);
 $router->post('/mall/api/auth/logout', [$apiController, 'logout']);
 $router->get('/mall/api/products', [$apiController, 'products']);
 $router->get('/mall/api/products/{id}/quick-view', [$apiController, 'quickView']);
+$router->get('/mall/api/activities', [$apiController, 'activities']);
 $router->get('/mall/api/cart', [$apiController, 'cart']);
 $router->post('/mall/api/cart', [$apiController, 'addCart']);
 $router->put('/mall/api/cart/{id}', [$apiController, 'updateCart']);

@@ -185,6 +185,11 @@ class ApiController extends BaseController
         });
     }
 
+    public function activities(Request $request, array $params = []): Response
+    {
+        return $this->respond(fn (): array => $this->catalog->listActivities(true));
+    }
+
     public function cart(Request $request, array $params = []): Response
     {
         return $this->respond(function (): array {
